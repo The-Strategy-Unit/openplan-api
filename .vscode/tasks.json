@@ -1,0 +1,58 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "type": "func",
+      "label": "func: host start",
+      "command": "host start",
+      "problemMatcher": "$func-python-watch",
+      "isBackground": true,
+      "dependsOn": [
+        "pip install (functions)",
+        "kill-process-on-7071"
+      ]
+    },
+    {
+      "label": "pip install (functions)",
+      "type": "shell",
+      "osx": {
+        "command": "${config:azureFunctions.pythonVenv}/bin/python -m pip install -r requirements.txt"
+      },
+      "windows": {
+        "command": "${config:azureFunctions.pythonVenv}\\Scripts\\python -m pip install -r requirements.txt"
+      },
+      "linux": {
+        "command": "${config:azureFunctions.pythonVenv}/bin/python -m pip install -r requirements.txt"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "kill-process-on-7071",
+      "type": "shell",
+      "command": "${env:OS}",
+      "windows": {
+        "command": "powershell",
+        "args": [
+          "-NoProfile",
+          "-Command",
+          "$id = (Get-NetTCPConnection -LocalPort 7071 -ErrorAction SilentlyContinue).OwningProcess; if ($id) { Stop-Process -Id $id -Force }"
+        ]
+      },
+      "linux": {
+        "command": "bash",
+        "args": [
+          "-c",
+          "pid=$(lsof -ti:7071); if [ -n \"$pid\" ]; then kill -9 $pid; fi"
+        ]
+      },
+      "osx": {
+        "command": "bash",
+        "args": [
+          "-c",
+          "pid=$(lsof -ti:7071); if [ -n \"$pid\" ]; then kill -9 $pid; fi"
+        ]
+      },
+      "problemMatcher": []
+    }
+  ]
+}

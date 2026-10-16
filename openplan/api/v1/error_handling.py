@@ -1,0 +1,88 @@
+import json
+import logging
+import re
+from collections.abc import Callable
+from functools import wraps
+from typing import Any
+
+import azure.functions as func
+import polars as pl
+from azure.core.exceptions import (
+    AzureError,
+    ResourceNotFoundError,
+    ServiceRequestError,
+    ServiceResponseError,
+)
+from pydantic import ValidationError
+
+
+def is_valid_fyear(fyear: str) -> bool:
+    return bool(re.match(r"^\d{6}$", fyear))
+
+
+def is_valid_version(version: str) -> bool:
+    return bool(re.match(r"^(dev|v\d+\.\d+(\.\d+)?)$", version))
+
+
+def error_response(message: str, status_code: int) -> func.HttpResponse:
+    return func.HttpResponse(
+        json.dumps({"error": message}),
+        status_code=status_code,
+        mimetype="application/json",
+    )
+
+
+def validation_error_response(exc: ValidationError) -> func.HttpResponse:
+    details = [
+        {
+            "field": ".".join(str(part) for part in err["loc"]),
+            "message": err["msg"],
+        }
+        for err in exc.errors()
+    ]
+    return func.HttpResponse(
+        json.dumps(
+            {
+                "error": "Invalid request parameters",
+                "details": details,
+            }
+        ),
+        status_code=400,
+        mimetype="application/json",
+    )
+
+
+def handle_route_errors(
+    route: Callable[..., func.HttpResponse],
+) -> Callable[..., func.HttpResponse]:
+    @wraps(route)
+    def wrapper(*args: Any, **kwargs: Any) -> func.HttpResponse:
+        logger = logging.getLogger(route.__module__)
+        try:
+            return route(*args, **kwargs)
+
+        except ValidationError as exc:
+            logger.info("Invalid request parameters: %s", exc)
+            return validation_error_response(exc)
+
+        except ResourceNotFoundError:
+            logger.info("Requested resource not found")
+            return error_response("Dataset not found", 404)
+
+        except (ServiceRequestError, ServiceResponseError):
+            logger.exception("Azure Storage connection failed")
+            return error_response("Data service temporarily unavailable", 503)
+
+        except AzureError:
+            logger.exception("Azure Storage request failed")
+            return error_response("Data service error", 500)
+
+        except pl.exceptions.PolarsError:
+            logger.exception("Failed to process data")
+            return error_response("Failed to process dataset", 500)
+
+        except Exception:
+            logger.exception("Unexpected route error")
+            return error_response("Internal server error", 500)
+
+    return wrapper

@@ -1,0 +1,1 @@
+CURRENT_APP_VERSION = "dev"

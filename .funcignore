@@ -1,0 +1,23 @@
+.venv/
+.git/
+.github/
+.vscode/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+__pycache__/
+tests/
+*.py[cod]
+
+# Local configuration and development files
+local.settings.json
+.env
+.env.*
+!.env.example
+
+# Build artefacts
+dist/
+build/
+*.egg-info/
+
+infrastructure
