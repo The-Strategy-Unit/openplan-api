@@ -15,9 +15,7 @@ logger = logging.getLogger(__name__)
 def openapi_json(req: func.HttpRequest) -> func.HttpResponse:
     return func.HttpResponse(
         get_openapi_json(
-            title="OpenPlan API",
-            openapi_version="3.2.0",
-            app=app,
+            title="OpenPlan API", openapi_version="3.2.0", app=app, route_prefix=""
         ),
         mimetype="application/json",
     )
@@ -25,7 +23,7 @@ def openapi_json(req: func.HttpRequest) -> func.HttpResponse:
 
 @app.route(route="docs", methods=["GET"])
 def swagger_ui(req: func.HttpRequest) -> func.HttpResponse:
-    return render_swagger_ui()
+    return render_swagger_ui(openapi_url="/openapi.json")
 
 
 app.register_blueprint(peers.bp)
