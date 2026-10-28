@@ -6,13 +6,17 @@ import polars as pl
 from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient
 
-credential = DefaultAzureCredential()
+__CREDENTIAL: DefaultAzureCredential | None = None
 
 
 def _read_azure_file(file: str) -> BytesIO:
+    global __CREDENTIAL
+    if __CREDENTIAL is None:
+        __CREDENTIAL = DefaultAzureCredential()
+
     blob_service_client = BlobServiceClient(
         account_url="https://nhpsa.blob.core.windows.net",
-        credential=credential,
+        credential=__CREDENTIAL,
     )
 
     container_client = blob_service_client.get_container_client("inputs-data")
