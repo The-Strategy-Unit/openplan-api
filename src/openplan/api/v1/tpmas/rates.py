@@ -7,8 +7,9 @@ import polars as pl
 from azure_functions_openapi import openapi
 
 from openplan.api.v1.data import read_azure_parquet_file
-from openplan.api.v1.error_handling import handle_route_errors
-from openplan.api.v1.models import FinancialYearPath, VersionQuery
+from openplan.api.v1.handle_route_errors import handle_route_errors
+from openplan.api.v1.models.fyear import FinancialYearPath
+from openplan.api.v1.models.version import VersionQuery
 from openplan.api.v1.reference.providers import ProviderPath
 from openplan.api.v1.settings import CURRENT_APP_VERSION
 from openplan.api.v1.tpmas import TPMAPath
