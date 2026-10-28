@@ -7,8 +7,8 @@ from azure_functions_openapi import openapi
 from pydantic import BaseModel, Field, field_validator
 
 from openplan.api.v1.data import read_azure_csv_file
-from openplan.api.v1.error_handling import handle_route_errors
-from openplan.api.v1.models import VersionQuery
+from openplan.api.v1.handle_route_errors import handle_route_errors
+from openplan.api.v1.models.version import VersionQuery
 from openplan.api.v1.reference.providers import ProviderCode
 from openplan.api.v1.settings import CURRENT_APP_VERSION
 

@@ -1,6 +1,5 @@
 import json
 import logging
-import re
 from collections.abc import Callable
 from functools import wraps
 from typing import Any
@@ -14,14 +13,6 @@ from azure.core.exceptions import (
     ServiceResponseError,
 )
 from pydantic import ValidationError
-
-
-def is_valid_fyear(fyear: str) -> bool:
-    return bool(re.match(r"^\d{6}$", fyear))
-
-
-def is_valid_version(version: str) -> bool:
-    return bool(re.match(r"^(dev|v\d+\.\d+(\.\d+)?)$", version))
 
 
 def error_response(message: str, status_code: int) -> func.HttpResponse:
@@ -69,7 +60,7 @@ def handle_route_errors(
             logger.info("Requested resource not found")
             return error_response("Dataset not found", 404)
 
-        except (ServiceRequestError, ServiceResponseError):
+        except ServiceRequestError, ServiceResponseError:
             logger.exception("Azure Storage connection failed")
             return error_response("Data service temporarily unavailable", 503)
 

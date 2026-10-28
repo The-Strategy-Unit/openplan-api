@@ -8,8 +8,8 @@ from packaging.version import Version
 from pydantic import AfterValidator, BaseModel, Field, TypeAdapter
 
 from openplan.api.v1.data import read_azure_json_file
-from openplan.api.v1.error_handling import handle_route_errors
-from openplan.api.v1.models import VersionQuery
+from openplan.api.v1.handle_route_errors import handle_route_errors
+from openplan.api.v1.models.version import VersionQuery
 from openplan.api.v1.settings import CURRENT_APP_VERSION
 
 bp = func.Blueprint()
