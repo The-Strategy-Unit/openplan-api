@@ -20,35 +20,6 @@ def _get_providers():
     return read_azure_json_file("api/providers.json")
 
 
-def validate_provider(value: str) -> str:
-    if not is_valid_provider(value):
-        raise ValueError("Not recognised as a valid provider code")
-    return value
-
-
-ProviderCode = Annotated[
-    str,
-    Field(
-        min_length=3,
-        max_length=5,
-        pattern=r"^[A-Z0-9]{3}|([A-Z][0-9]){2}[A-Z]$",
-        description="Provider ODS code.",
-    ),
-    AfterValidator(validate_provider),
-]
-
-
-class ProviderPath(BaseModel):
-    provider: ProviderCode
-
-
-class ProvidersResponseModel(BaseModel):
-    model_config = {"extra": "allow"}
-
-
-ProvidersResponseSchema = TypeAdapter(dict[str, str]).json_schema()
-
-
 def get_providers(version: Version | str | None = None) -> Any:
     if version is None or version == "dev":
 
@@ -71,6 +42,28 @@ def is_valid_provider(provider: str, version: Version | str | None = None) -> bo
     return provider in get_providers(version)
 
 
+def validate_provider(value: str) -> str:
+    if not is_valid_provider(value):
+        raise ValueError("Not recognised as a valid provider code")
+    return value
+
+
+ProviderCode = Annotated[
+    str,
+    Field(
+        min_length=3,
+        max_length=5,
+        pattern=r"^[A-Z0-9]{3}|([A-Z][0-9]){2}[A-Z]$",
+        description="Provider ODS code.",
+    ),
+    AfterValidator(validate_provider),
+]
+
+
+class ProviderPath(BaseModel):
+    provider: ProviderCode
+
+
 @bp.route("v1/reference/providers", methods=["GET"])
 @openapi(
     summary="List available providers",
@@ -82,7 +75,7 @@ def is_valid_provider(provider: str, version: Version | str | None = None) -> bo
             "description": "Successful response",
             "content": {
                 "application/json": {
-                    "schema": ProvidersResponseSchema,
+                    "schema": TypeAdapter(dict[str, str]).json_schema(),
                 }
             },
         },
