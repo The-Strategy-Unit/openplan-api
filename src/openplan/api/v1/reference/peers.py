@@ -54,13 +54,13 @@ def _get_peers(provider: str, version: Version | str | None = None) -> Any:
 )
 @handle_route_errors
 def route_peers(req: func.HttpRequest) -> func.HttpResponse:
-    path_params = ProviderPath.model_validate(
-        {"provider": req.route_params.get("provider")}
-    )
-    provider = path_params.provider
     version = VersionQuery.model_validate(
         {"version": req.params.get("version", CURRENT_APP_VERSION)}
     ).version
+
+    provider = ProviderPath.model_validate(
+        {"provider": req.route_params.get("provider")}, context=version
+    ).provider
 
     peers = _get_peers(provider, version)
     return func.HttpResponse(json.dumps(peers), mimetype="application/json")
