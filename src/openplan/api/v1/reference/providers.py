@@ -5,7 +5,7 @@ from typing import Annotated, Any
 import azure.functions as func
 from azure_functions_openapi import openapi
 from packaging.version import Version
-from pydantic import AfterValidator, BaseModel, Field, TypeAdapter
+from pydantic import AfterValidator, BaseModel, Field, TypeAdapter, ValidationInfo
 
 from openplan.api.v1.data import read_azure_json_file
 from openplan.api.v1.error_handling import handle_route_errors
@@ -42,8 +42,10 @@ def is_valid_provider(provider: str, version: Version | str | None = None) -> bo
     return provider in get_providers(version)
 
 
-def validate_provider(value: str) -> str:
-    if not is_valid_provider(value):
+def validate_provider(value: str, info: ValidationInfo | None = None) -> str:
+    version = info.context if info else None
+
+    if not is_valid_provider(value, version):
         raise ValueError("Not recognised as a valid provider code")
     return value
 

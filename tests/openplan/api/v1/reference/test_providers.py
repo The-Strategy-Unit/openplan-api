@@ -79,7 +79,7 @@ def test_validate_provider(mocker):
     # arrange
     mocker.patch(
         "openplan.api.v1.reference.providers.is_valid_provider",
-        side_effect=lambda value: value in ["a", "b", "c"],
+        side_effect=lambda value, _info: value in ["a", "b", "c"],
     )
 
     # act & assert
@@ -95,7 +95,7 @@ def test_ProviderCode(mocker):
     provider_code_adapter = TypeAdapter(providers.ProviderCode)
     mocker.patch(
         "openplan.api.v1.reference.providers.is_valid_provider",
-        side_effect=lambda value: value in ["R00", "A0A0A"],
+        side_effect=lambda value, _info: value in ["R00", "A0A0A"],
     )
     # act & assert
     assert provider_code_adapter.validate_python("R00") == "R00"

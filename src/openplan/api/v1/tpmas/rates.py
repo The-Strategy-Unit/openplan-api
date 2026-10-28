@@ -69,14 +69,15 @@ def get_tpma_rates_for_fyear(
 )
 @handle_route_errors
 def route_tpma_rates_for_provider(req: func.HttpRequest) -> func.HttpResponse:
-    path_params = ProviderPath.model_validate(
-        {"provider": req.route_params.get("provider")}
-    )
     version = VersionQuery.model_validate(
         {"version": req.params.get("version", CURRENT_APP_VERSION)}
     ).version
+
+    provider = ProviderPath.model_validate(
+        {"provider": req.route_params.get("provider")}, context=version
+    ).provider
+
     tpma = TPMAPath.model_validate({"tpma": req.route_params.get("tpma")}).tpma
-    provider = path_params.provider
 
     logger.info(
         "Request for rates by provider: version=%s, provider=%s, tpma=%s",
