@@ -70,12 +70,10 @@ mainOutputs=$(az deployment group create \
   --parameters \
     entraClientId="$entraClientId")
 
-principalId=$(echo $mainOutputs | \
-  jq -r '.properties.outputs.userAssignedIdentityId.value')
-
 # grant data access to the storage account -------------------------------------
 echo "Granting data access to the storage account $storageAccountName"
 
+principalId=$(jq -r '.properties.outputs.userAssignedIdentityPrincipalId.value' <<< $mainOutputs)
 az deployment group create \
   --resource-group "$storageAccountResourceGroup" \
   --template-file "infrastructure/grant-data-access.bicep" \
@@ -86,7 +84,8 @@ az deployment group create \
   --only-show-errors 1>/dev/null
 
 # deploy the function app ------------------------------------------------------
-echo "Deploying the function app (waiting 5s for resources to be ready)"
+echo "Deploying the function app '$functionAppName' (waiting 5s for resources to be ready)"
+functionAppName=$(jq -r '.properties.outputs.functionAppName.value' <<< $mainOutputs)
 
 sleep 5 
-func azure functionapp publish $resourceGroup --python
+func azure functionapp publish $functionAppName --python

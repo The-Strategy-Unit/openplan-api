@@ -95,7 +95,8 @@ module functionAuthentication 'modules/function-authentication.bicep' = {
   ]
 }
 
+output functionAppName string = functionAppName
 output functionAppUrl string = functionApp.outputs.url
-output userAssignedIdentityId string = identity.outputs.principalId
+output userAssignedIdentityPrincipalId string = identity.outputs.principalId
 output hostStorageAccountName string = hostStorage.outputs.name
 output applicationInsightsName string = monitoring.outputs.insightsName

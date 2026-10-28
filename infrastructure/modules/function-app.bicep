@@ -55,7 +55,6 @@ resource functionApp 'Microsoft.Web/sites@2025-03-01' = {
   location: location
   kind: 'functionapp,linux'
   identity: {
-    // type: 'SystemAssigned, UserAssigned'
     type: 'UserAssigned'
     userAssignedIdentities: {
       '${identityId}': {}
