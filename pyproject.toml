@@ -30,3 +30,17 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/openplan"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+norecursedirs = ["docs", "*.egg-info", ".git", "appdir", ".tox", "__pycache__"]
+addopts = "--cov --cov-branch --cov-report=term-missing"
+
+[tool.coverage.run]
+source_dirs = ["src"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+include_namespace_packages = true
