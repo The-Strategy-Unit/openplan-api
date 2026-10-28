@@ -1,0 +1,35 @@
+name: CodeCov
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        shell: bash -l {0}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install the latest version of uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: "latest"
+          activate-environment: true
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Generate Report
+        run: uv run pytest --cov-report xml:coverage.xml
+
+      - name: Upload Coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
