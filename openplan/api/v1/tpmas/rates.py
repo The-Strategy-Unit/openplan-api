@@ -60,7 +60,10 @@ def get_tpma_rates(
 @handle_route_errors
 def route_tpma_rates(req: func.HttpRequest) -> func.HttpResponse:
     query_params = RatesQuery.model_validate(dict(req.params))
-    tpma = TPMAPath.model_validate({"tpma": req.route_params.get("tpma")}).tpma
+    tpma = TPMAPath.model_validate(
+        {"tpma": req.route_params.get("tpma")},
+        context={"version": query_params.version},
+    ).tpma
 
     logger.info(
         "Request for rates: version=%s, tpma=%s, provider=%s, fyear=%s",

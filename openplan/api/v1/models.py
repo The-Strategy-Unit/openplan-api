@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from pydantic import AfterValidator, BaseModel, Field, field_validator
+from pydantic import AfterValidator, BaseModel, Field, ValidationInfo, field_validator
 
 from openplan.api.v1.error_handling import is_valid_fyear, is_valid_version
 from openplan.api.v1.settings import CURRENT_APP_VERSION
@@ -24,15 +24,22 @@ class VersionQuery(BaseModel):
 
 def validate_fyear(value: str) -> str:
     if not is_valid_fyear(value):
-        raise ValueError("fyear must be a 6-digit financial year value")
+        raise ValueError("fyear must identify consecutive financial years, e.g. 202425")
     return value
 
 
 FinancialYear = Annotated[
     str,
     Field(
-        pattern=r"^\d{6}$",
-        description="Financial year in YYYYYY format, e.g. 202425.",
+        pattern=r"^[0-9]{6}$",
+        description="Consecutive financial years in YYYYYY format, e.g. 202425 or 199900.",
     ),
     AfterValidator(validate_fyear),
 ]
+
+
+def validation_version(info: ValidationInfo) -> str:
+    """Use the model's validated version, or request context for path models."""
+    return (info.data or {}).get(
+        "version", (info.context or {}).get("version", CURRENT_APP_VERSION)
+    )

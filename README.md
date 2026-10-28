@@ -53,16 +53,28 @@ and defaults to `dev`.
 | TPMA rates          | `/v1/tpmas/{tpma}/rates`                       | `provider`, `fyear`, `version`                 |
 | Demographic factors | `/v1/providers/{provider}/demographic-factors` | `start_year`, `end_year`, `variant`, `version` |
 
+Provider and TPMA identifiers are validated against the selected dataset version.
+Use the catalogues with the same `version` to discover valid codes, including
+historical identifiers. Validity includes the introduction release and excludes
+the retirement release. The TPMA catalogue maps codes to metadata objects with
+`active_from`, optional `active_to`, and any additional catalogue metadata.
+
 Rates require `provider`, `fyear`, or both. When both are supplied, both filters
 apply. Each response row contains `provider`, `fyear`, `denominator`, and
 `std_rate`, regardless of the filters. A valid query with no matching rows
-returns an empty list. Financial years use six digits, for example `202425`.
+returns an empty list. Financial years use six digits spanning consecutive
+years, for example `202425`. Century rollovers such as `199900` are valid;
+values such as `202499` are rejected.
 
 Demographic factors require `start_year`, `end_year`, and `variant` as query
 parameters. `end_year` must be greater than or equal to `start_year`. The start
 year selects the baseline financial-year dataset; the response contains
 population and birth factors for the baseline and horizon years, grouped by sex
 and age. Variant identifiers must not contain path separators.
+
+Invalid parameters or codes outside the selected dataset version return 400.
+Peer queries return 404 when no peer set exists for that provider and version;
+an explicitly empty peer set remains a successful 200 response.
 
 Example requests (replace provider and TPMA codes with values from the catalogues):
 

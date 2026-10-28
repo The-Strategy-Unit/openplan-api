@@ -5,11 +5,11 @@ from typing import Annotated, Any
 import azure.functions as func
 from azure_functions_openapi import openapi
 from packaging.version import Version
-from pydantic import AfterValidator, BaseModel, Field, TypeAdapter
+from pydantic import AfterValidator, BaseModel, Field, TypeAdapter, ValidationInfo
 
 from openplan.api.v1.data import read_azure_json_file
 from openplan.api.v1.error_handling import handle_route_errors
-from openplan.api.v1.models import VersionQuery
+from openplan.api.v1.models import VersionQuery, validation_version
 from openplan.api.v1.settings import CURRENT_APP_VERSION
 
 bp = func.Blueprint()
@@ -20,8 +20,8 @@ def _get_providers():
     return read_azure_json_file("api/providers.json")
 
 
-def validate_provider(value: str) -> str:
-    if not is_valid_provider(value):
+def validate_provider(value: str, info: ValidationInfo) -> str:
+    if not is_valid_provider(value, validation_version(info)):
         raise ValueError("Not recognised as a valid provider code")
     return value
 
@@ -74,7 +74,7 @@ def is_valid_provider(provider: str, version: Version | str | None = None) -> bo
 @bp.route("v1/reference/providers", methods=["GET"])
 @openapi(
     summary="List available providers",
-    description="Returns the providers available for the requested API version.",
+    description="Returns the providers available for the requested dataset version.",
     tags=["Reference"],
     querystring=VersionQuery,
     responses={

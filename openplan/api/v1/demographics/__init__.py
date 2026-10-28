@@ -91,7 +91,8 @@ def get_demographic_factors(
 def route_demographic_factors(req: func.HttpRequest) -> func.HttpResponse:
     query_params = DemographicFactorsQuery.model_validate(dict(req.params))
     provider = ProviderPath.model_validate(
-        {"provider": req.route_params.get("provider")}
+        {"provider": req.route_params.get("provider")},
+        context={"version": query_params.version},
     ).provider
     version = query_params.version
     start_year = query_params.start_year
