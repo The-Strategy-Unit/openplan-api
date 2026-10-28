@@ -4,27 +4,26 @@ import logging
 import azure.functions as func
 import polars as pl
 from azure_functions_openapi import openapi
-from pydantic import BaseModel, Field, field_validator
+from pydantic import Field, field_validator
 
 from openplan.api.v1.data import read_azure_csv_file
 from openplan.api.v1.error_handling import handle_route_errors
 from openplan.api.v1.models import VersionQuery
-from openplan.api.v1.reference.providers import ProviderCode
-from openplan.api.v1.settings import CURRENT_APP_VERSION
+from openplan.api.v1.reference.providers import ProviderPath
 
 bp = func.Blueprint()
 logger = logging.getLogger(__name__)
 
 
-class DemographicFactorsPath(BaseModel):
-    provider: ProviderCode
+class DemographicFactorsQuery(VersionQuery):
     start_year: int = Field(..., ge=1900, le=9999, description="Start year.")
     end_year: int = Field(..., ge=1900, le=9999, description="End year.")
     variant: str = Field(
         ...,
         min_length=1,
         max_length=64,
-        description="Demographic variant identifier.",
+        pattern=r"^[^/\\]+$",
+        description="Demographic variant identifier, without path separators.",
     )
 
     @field_validator("end_year")
@@ -71,15 +70,15 @@ def get_demographic_factors(
 
 
 @bp.route(
-    route="v1/demographics/provider/{provider}/{start_year}/{end_year}/{variant}",
+    route="v1/providers/{provider}/demographic-factors",
     methods=["GET"],
 )
 @openapi(
     summary="Get demographic factors for a provider",
     description="Returns demographic factors for the specified provider and year range.",
     tags=["Demographics"],
-    path=DemographicFactorsPath,
-    querystring=VersionQuery,
+    path=ProviderPath,
+    querystring=DemographicFactorsQuery,
     responses={
         200: {
             "description": "Successful response",
@@ -90,21 +89,14 @@ def get_demographic_factors(
 )
 @handle_route_errors
 def route_demographic_factors(req: func.HttpRequest) -> func.HttpResponse:
-    version = VersionQuery.model_validate(
-        {"version": req.params.get("version", CURRENT_APP_VERSION)}
-    ).version
-    route_params = DemographicFactorsPath.model_validate(
-        {
-            "provider": req.route_params.get("provider"),
-            "start_year": req.route_params.get("start_year"),
-            "end_year": req.route_params.get("end_year"),
-            "variant": req.route_params.get("variant"),
-        }
-    )
-    provider = route_params.provider
-    start_year = route_params.start_year
-    end_year = route_params.end_year
-    variant = route_params.variant
+    query_params = DemographicFactorsQuery.model_validate(dict(req.params))
+    provider = ProviderPath.model_validate(
+        {"provider": req.route_params.get("provider")}
+    ).provider
+    version = query_params.version
+    start_year = query_params.start_year
+    end_year = query_params.end_year
+    variant = query_params.variant
 
     logger.info(
         "Request for demographic factors: version=%s, provider=%s, start_year=%d, end_year=%d, variant=%s",
