@@ -1,28 +1,19 @@
-from typing import TypeVar
+from typing import Annotated, TypeVar
 
-import azure.functions as func
-from azure_functions_openapi import openapi
+from fastapi import APIRouter, HTTPException, Path, Query, Response
 from pydantic import BaseModel, ValidationError
 
 from openplan.api.v1.data import read_azure_json_file_uncached
 from openplan.api.v1.discovery.models import (
-    DatasetIndex,
-    DatasetManifest,
-    DemographicAvailabilityResponse,
-    RateAvailabilityResponse,
-    VersionsResponse,
+    DatasetIndex, DatasetManifest, DemographicAvailabilityResponse,
+    RateAvailabilityResponse, VersionsResponse,
 )
-from openplan.api.v1.error_handling import (
-    DATA_ERROR_RESPONSES,
-    METADATA_ERROR_RESPONSES,
-    error_response,
-    handle_route_errors,
-)
+from openplan.api.v1.error_handling import DATA_ERROR_RESPONSES, METADATA_ERROR_RESPONSES
 from openplan.api.v1.models import VersionQuery
-from openplan.api.v1.reference.providers import ProviderPath
-from openplan.api.v1.tpmas import TPMAPath
+from openplan.api.v1.reference.providers import ProviderIdentifier, validate_provider
+from openplan.api.v1.tpmas import TPMAIdentifier, validate_tpma
 
-bp = func.Blueprint()
+router = APIRouter(tags=["Discovery"])
 Metadata = TypeVar("Metadata", bound=BaseModel)
 
 
@@ -41,71 +32,60 @@ def _read_manifest(version: str) -> DatasetManifest:
     return manifest
 
 
-@bp.route("v1/reference/versions", methods=["GET"])
-@openapi(
+@router.get(
+    "/v1/reference/versions", response_model=VersionsResponse,
     summary="List published dataset releases",
     description="Returns releases from the publisher's index, including publication time and source.",
-    tags=["Discovery"],
-    responses={200: VersionsResponse, **METADATA_ERROR_RESPONSES},
+    responses=METADATA_ERROR_RESPONSES,
 )
-@handle_route_errors
-def route_versions(req: func.HttpRequest) -> func.HttpResponse:
+def route_versions(response: Response) -> VersionsResponse:
     index = _read_metadata("api/versions.json", DatasetIndex)
-    return func.HttpResponse(
-        VersionsResponse(versions=index.versions).model_dump_json(),
-        mimetype="application/json", headers={"Cache-Control": "no-store"},
-    )
+    response.headers["Cache-Control"] = "no-store"
+    return VersionsResponse(versions=index.versions)
 
 
-@bp.route("v1/tpmas/{tpma}/rates/availability", methods=["GET"])
-@openapi(
+@router.get(
+    "/v1/tpmas/{tpma}/rates/availability", response_model=RateAvailabilityResponse,
     summary="Get available TPMA rate selections",
     description="Lists valid provider and financial-year combinations for the selected dataset release.",
-    tags=["Discovery"], path=TPMAPath, querystring=VersionQuery,
-    responses={200: RateAvailabilityResponse, **DATA_ERROR_RESPONSES},
+    responses=DATA_ERROR_RESPONSES,
 )
-@handle_route_errors
-def route_rate_availability(req: func.HttpRequest) -> func.HttpResponse:
-    version = VersionQuery.model_validate(dict(req.params)).version
-    tpma = TPMAPath.model_validate(
-        {"tpma": req.route_params.get("tpma")}, context={"version": version},
-    ).tpma
-    manifest = _read_manifest(version)
+def route_rate_availability(
+    tpma: Annotated[TPMAIdentifier, Path()],
+    query: Annotated[VersionQuery, Query()],
+    response: Response,
+) -> RateAvailabilityResponse:
+    validate_tpma(tpma, query.version)
+    manifest = _read_manifest(query.version)
     dataset = manifest.rates.get(tpma)
     if dataset is None:
-        return error_response("Rate availability not found for this TPMA and dataset version", 404)
-    response = RateAvailabilityResponse(
+        raise HTTPException(404, "Rate availability not found for this TPMA and dataset version")
+    response.headers["Cache-Control"] = "no-store"
+    return RateAvailabilityResponse(
         version=manifest.version, published_at=manifest.published_at,
         source=manifest.source, tpma=tpma, **dataset.model_dump(),
     )
-    return func.HttpResponse(
-        response.model_dump_json(), mimetype="application/json",
-        headers={"Cache-Control": "no-store"},
-    )
 
 
-@bp.route("v1/providers/{provider}/demographic-factors/availability", methods=["GET"])
-@openapi(
+@router.get(
+    "/v1/providers/{provider}/demographic-factors/availability",
+    response_model=DemographicAvailabilityResponse,
     summary="Get available demographic selections",
     description="Lists valid start-year, variant, and horizon-year combinations for both population and births.",
-    tags=["Discovery"], path=ProviderPath, querystring=VersionQuery,
-    responses={200: DemographicAvailabilityResponse, **DATA_ERROR_RESPONSES},
+    responses=DATA_ERROR_RESPONSES,
 )
-@handle_route_errors
-def route_demographic_availability(req: func.HttpRequest) -> func.HttpResponse:
-    version = VersionQuery.model_validate(dict(req.params)).version
-    provider = ProviderPath.model_validate(
-        {"provider": req.route_params.get("provider")}, context={"version": version},
-    ).provider
-    manifest = _read_manifest(version)
+def route_demographic_availability(
+    provider: Annotated[ProviderIdentifier, Path()],
+    query: Annotated[VersionQuery, Query()],
+    response: Response,
+) -> DemographicAvailabilityResponse:
+    validate_provider(provider, query.version)
+    manifest = _read_manifest(query.version)
     dataset = manifest.demographics.get(provider)
     if dataset is None:
-        return error_response("Demographic availability not found for this provider and dataset version", 404)
-    response = DemographicAvailabilityResponse(
+        raise HTTPException(404, "Demographic availability not found for this provider and dataset version")
+    response.headers["Cache-Control"] = "no-store"
+    return DemographicAvailabilityResponse(
         version=manifest.version, published_at=manifest.published_at,
         source=manifest.source, provider=provider, **dataset.model_dump(),
-    )
-    return func.HttpResponse(
-        response.model_dump_json(), mimetype="application/json",
-        headers={"Cache-Control": "no-store"},
     )

@@ -1,73 +1,42 @@
-import json
-import logging
-from typing import Any
+from typing import Annotated
 
-import azure.functions as func
-from azure_functions_openapi import openapi
+from fastapi import APIRouter, HTTPException, Path, Query
 from packaging.version import Version
-from pydantic import JsonValue, TypeAdapter
+from pydantic import JsonValue
 
 from openplan.api.v1.data import read_azure_json_file
-from openplan.api.v1.error_handling import DATA_ERROR_RESPONSES, error_response, handle_route_errors
+from openplan.api.v1.error_handling import DATA_ERROR_RESPONSES
 from openplan.api.v1.models import VersionQuery
-from openplan.api.v1.reference.providers import ProviderPath
-from openplan.api.v1.settings import CURRENT_APP_VERSION
+from openplan.api.v1.reference.providers import ProviderIdentifier, validate_provider
 
-bp = func.Blueprint()
-logger = logging.getLogger(__name__)
-PeersResponseSchema = TypeAdapter(JsonValue).json_schema()
+router = APIRouter(tags=["Reference"], responses=DATA_ERROR_RESPONSES)
 
 
-def _get_peers(provider: str, version: Version | str | None = None) -> Any:
+def _get_peers(provider: str, version: Version | str | None = None) -> JsonValue:
     peers = read_azure_json_file("api/peers.json")
-
     if version is None or version == "dev":
         compare_version = lambda _: True
     else:
         if isinstance(version, str):
             version = Version(version)
-        compare_version = lambda v: Version(v) <= version
-
+        compare_version = lambda value: Version(value) <= version
     return max(
-        (
-            (Version(k2), v2)
-            for k2, v2 in peers.get(provider, {}).items()
-            if compare_version(k2)
-        ),
-        default=(None, None),
-        key=lambda x: x[0],
+        ((Version(release), value) for release, value in peers.get(provider, {}).items() if compare_version(release)),
+        default=(None, None), key=lambda item: item[0],
     )[1]
 
 
-@bp.route("v1/reference/peers/{provider}", methods=["GET"])
-@openapi(
+@router.get(
+    "/v1/reference/peers/{provider}", response_model=JsonValue,
     summary="List peer organisations for a provider",
-    description=(
-        "Returns the publisher-defined peer set for the requested provider and dataset version. "
-        "The payload is JSON; a narrower peer-set structure has not yet been specified."
-    ),
-    tags=["Reference"],
-    path=ProviderPath,
-    querystring=VersionQuery,
-    responses={
-        200: {
-            "description": "Successful response",
-            "content": {"application/json": {"schema": PeersResponseSchema}},
-        },
-        **DATA_ERROR_RESPONSES,
-    },
+    description="Returns the publisher-defined JSON peer set for the requested provider and dataset version.",
 )
-@handle_route_errors
-def route_peers(req: func.HttpRequest) -> func.HttpResponse:
-    version = VersionQuery.model_validate(
-        {"version": req.params.get("version", CURRENT_APP_VERSION)}
-    ).version
-    provider = ProviderPath.model_validate(
-        {"provider": req.route_params.get("provider")},
-        context={"version": version},
-    ).provider
-
-    peers = _get_peers(provider, version)
+def route_peers(
+    provider: Annotated[ProviderIdentifier, Path()],
+    query: Annotated[VersionQuery, Query()],
+) -> JsonValue:
+    validate_provider(provider, query.version)
+    peers = _get_peers(provider, query.version)
     if peers is None:
-        return error_response("No peer set available for this provider and dataset version", 404)
-    return func.HttpResponse(json.dumps(peers), mimetype="application/json")
+        raise HTTPException(404, "No peer set available for this provider and dataset version")
+    return peers

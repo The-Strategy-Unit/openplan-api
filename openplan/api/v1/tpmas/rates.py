@@ -1,17 +1,16 @@
-import json
 import logging
-from typing import Any
+from typing import Annotated, Any
 
-import azure.functions as func
+from fastapi import APIRouter, Path, Query
 import polars as pl
-from azure_functions_openapi import openapi
 
 from openplan.api.v1.data import read_azure_parquet_file
-from openplan.api.v1.error_handling import DATA_ERROR_RESPONSES, handle_route_errors
-from openplan.api.v1.tpmas import TPMAPath
-from openplan.api.v1.tpmas.models import RatesQuery, RatesResponseSchema
+from openplan.api.v1.error_handling import DATA_ERROR_RESPONSES
+from openplan.api.v1.reference.providers import validate_provider
+from openplan.api.v1.tpmas import TPMAIdentifier, validate_tpma
+from openplan.api.v1.tpmas.models import Rate, RatesQuery
 
-bp = func.Blueprint()
+router = APIRouter(tags=["TPMA Rates"], responses=DATA_ERROR_RESPONSES)
 logger = logging.getLogger(__name__)
 
 
@@ -34,49 +33,27 @@ def get_tpma_rates(
     )
 
 
-@bp.route(route="v1/tpmas/{tpma}/rates", methods=["GET"])
-@openapi(
+@router.get(
+    "/v1/tpmas/{tpma}/rates", response_model=list[Rate],
     summary="Get TPMA rates",
     description=(
         "Returns rates for the specified TPMA, filtered by provider, financial year, "
         "or both. At least one of provider or fyear must be supplied. Each row "
         "contains provider, fyear, denominator, and std_rate."
     ),
-    tags=["TPMA Rates"],
-    path=TPMAPath,
-    querystring=RatesQuery,
-    responses={
-        200: {
-            "description": "Successful response",
-            "content": {
-                "application/json": {
-                    "schema": RatesResponseSchema,
-                }
-            },
-        },
-        **DATA_ERROR_RESPONSES,
-    },
 )
-@handle_route_errors
-def route_tpma_rates(req: func.HttpRequest) -> func.HttpResponse:
-    query_params = RatesQuery.model_validate(dict(req.params))
-    tpma = TPMAPath.model_validate(
-        {"tpma": req.route_params.get("tpma")},
-        context={"version": query_params.version},
-    ).tpma
-
+def route_tpma_rates(
+    tpma: Annotated[TPMAIdentifier, Path()],
+    query: Annotated[RatesQuery, Query()],
+) -> list[dict[str, Any]]:
+    if query.provider is not None:
+        validate_provider(query.provider, query.version)
+    validate_tpma(tpma, query.version)
     logger.info(
         "Request for rates: version=%s, tpma=%s, provider=%s, fyear=%s",
-        query_params.version,
-        tpma,
-        query_params.provider,
-        query_params.fyear,
+        query.version, tpma, query.provider, query.fyear,
     )
-
-    rates = get_tpma_rates(
-        query_params.version,
-        tpma,
-        provider=query_params.provider,
-        fyear=int(query_params.fyear) if query_params.fyear is not None else None,
+    return get_tpma_rates(
+        query.version, tpma, provider=query.provider,
+        fyear=int(query.fyear) if query.fyear is not None else None,
     )
-    return func.HttpResponse(json.dumps(rates), mimetype="application/json")

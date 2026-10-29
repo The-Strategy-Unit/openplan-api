@@ -2,25 +2,26 @@ import json
 import unittest
 from unittest.mock import patch
 
-import azure.functions as func
 import polars as pl
 
-import function_app
 from openplan.api.v1 import data, demographics, tpmas
 from openplan.api.v1.reference import providers
 from openplan.api.v1.tpmas import rates
+from tests.support import HTTPTestCase
 
 
-class EndpointContractTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.routes = {}
-        for function in function_app.app.get_functions():
-            for binding in function.get_bindings():
-                if binding.type == "httpTrigger":
-                    cls.routes[binding.route] = function.get_user_function()
+class EndpointContractTests(HTTPTestCase):
+    routes = {
+        "/health", "/v1/reference/versions",
+        "/v1/tpmas/{tpma}/rates/availability",
+        "/v1/providers/{provider}/demographic-factors/availability",
+        "/v1/reference/providers", "/v1/reference/peers/{provider}",
+        "/v1/tpmas", "/v1/tpmas/{tpma}/rates",
+        "/v1/providers/{provider}/demographic-factors",
+    }
 
     def setUp(self):
+        super().setUp()
         provider_catalogue = {
             "R01": {"name": "Provider one", "valid_from": "v1.0"},
             "R02": {"name": "Provider two", "valid_from": "v1.0"},
@@ -62,60 +63,37 @@ class EndpointContractTests(unittest.TestCase):
         return mock
 
     def request_rates(self, params, tpma="IP-AA-001"):
-        request = func.HttpRequest(
-            method="GET",
-            url=f"http://localhost/v1/tpmas/{tpma}/rates",
-            body=b"",
-            route_params={"tpma": tpma},
-            params=params,
-        )
-        return self.routes["v1/tpmas/{tpma}/rates"](request)
+        return self.client.get(f"/v1/tpmas/{tpma}/rates", params=params)
 
     def request_demographics(self, params, provider="R01"):
-        request = func.HttpRequest(
-            method="GET",
-            url=f"http://localhost/v1/providers/{provider}/demographic-factors",
-            body=b"",
-            route_params={"provider": provider},
-            params=params,
-        )
-        return self.routes["v1/providers/{provider}/demographic-factors"](request)
+        return self.client.get(f"/v1/providers/{provider}/demographic-factors", params=params)
 
     def test_registered_routes_match_the_approved_contract(self):
-        self.assertEqual(set(self.routes), {
-            "openapi.json",
-            "docs",
-            "health",
-            "v1/reference/versions",
-            "v1/tpmas/{tpma}/rates/availability",
-            "v1/providers/{provider}/demographic-factors/availability",
-            "v1/reference/providers",
-            "v1/reference/peers/{provider}",
-            "v1/tpmas",
-            "v1/tpmas/{tpma}/rates",
-            "v1/providers/{provider}/demographic-factors",
-        })
+        response = self.client.get("/openapi.json")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(set(response.json()["paths"]), self.routes)
+        self.assertEqual(self.client.get("/docs").status_code, 200)
 
     def test_rates_filter_by_provider_with_complete_rows(self):
         response = self.request_rates({"provider": "R01"})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(json.loads(response.get_body()), self.rate_rows[:2])
+        self.assertEqual(json.loads(response.content), self.rate_rows[:2])
         self.read_rates.assert_called_once_with("api/dev/provider/rates/IP-AA-001.parquet")
 
     def test_rates_filter_by_financial_year_with_complete_rows(self):
         response = self.request_rates({"fyear": "202425"})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(json.loads(response.get_body()), [self.rate_rows[0], self.rate_rows[2]])
+        self.assertEqual(json.loads(response.content), [self.rate_rows[0], self.rate_rows[2]])
 
     def test_rates_apply_both_filters(self):
         response = self.request_rates({"provider": "R01", "fyear": "202425"})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(json.loads(response.get_body()), [self.rate_rows[0]])
+        self.assertEqual(json.loads(response.content), [self.rate_rows[0]])
 
     def test_rates_return_an_empty_list_for_no_matching_rows(self):
         response = self.request_rates({"provider": "R02", "fyear": "202526"})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(json.loads(response.get_body()), [])
+        self.assertEqual(json.loads(response.content), [])
 
     def test_rates_use_the_requested_dataset_version(self):
         response = self.request_rates({"provider": "R01", "version": "v1.0"})
@@ -127,7 +105,7 @@ class EndpointContractTests(unittest.TestCase):
             with self.subTest(params=params):
                 response = self.request_rates(params)
                 self.assertEqual(response.status_code, 400)
-                self.assertIn("provider or fyear", response.get_body().decode())
+                self.assertIn("provider or fyear", response.content.decode())
         self.read_rates.assert_not_called()
 
     def test_rates_reject_invalid_filters_before_reading_rate_data(self):
@@ -157,7 +135,7 @@ class EndpointContractTests(unittest.TestCase):
             "baseline": {"F": {"0": 10.0, "1": 20.0}, "M": {"0": 15.0}},
             "horizon": {"F": {"0": 12.0, "1": 22.0}, "M": {"0": 16.0}},
         }
-        self.assertEqual(json.loads(response.get_body()), {
+        self.assertEqual(json.loads(response.content), {
             "population": expected, "births": expected,
         })
         self.assertEqual(self.read_demographics.call_count, 2)
@@ -174,7 +152,7 @@ class EndpointContractTests(unittest.TestCase):
                 params = {key: value for key, value in valid.items() if key != missing}
                 response = self.request_demographics(params)
                 self.assertEqual(response.status_code, 400)
-                details = json.loads(response.get_body())["details"]
+                details = json.loads(response.content)["details"]
                 self.assertIn(missing, [detail["field"] for detail in details])
         self.read_demographics.assert_not_called()
 
@@ -193,7 +171,7 @@ class EndpointContractTests(unittest.TestCase):
             "start_year": "2024", "end_year": "2024", "variant": "principal",
         })
         self.assertEqual(response.status_code, 200)
-        for factors in json.loads(response.get_body()).values():
+        for factors in json.loads(response.content).values():
             self.assertEqual(factors["baseline"], factors["horizon"])
 
     def test_demographic_variant_cannot_change_the_dataset_path(self):
@@ -206,59 +184,67 @@ class EndpointContractTests(unittest.TestCase):
         self.read_demographics.assert_not_called()
 
     def test_openapi_matches_parameter_locations_and_rate_response(self):
-        request = func.HttpRequest(method="GET", url="http://localhost/openapi.json", body=b"")
-        response = self.routes["openapi.json"](request)
+        response = self.client.get("/openapi.json")
         self.assertEqual(response.status_code, 200)
-        spec = json.loads(response.get_body())
+        spec = response.json()
 
         def resolve_schema(schema):
             if "$ref" in schema:
                 return spec["components"]["schemas"][schema["$ref"].split("/")[-1]]
             return schema
 
-        def query_schema(operation):
-            parameter = next(
-                parameter for parameter in operation["parameters"]
-                if parameter["in"] == "querystring"
-            )
-            return resolve_schema(parameter["content"][
-                "application/x-www-form-urlencoded"
-            ]["schema"])
-
-        self.assertEqual(set(spec["paths"]), {f"/{route}" for route in self.routes} - {
-            "/openapi.json", "/docs",
-        })
+        self.assertEqual(set(spec["paths"]), self.routes)
         rate_operation = spec["paths"]["/v1/tpmas/{tpma}/rates"]["get"]
-        rate_parameters = {
-            (parameter["in"], parameter["name"]): parameter
-            for parameter in rate_operation["parameters"]
-        }
-        self.assertEqual(set(rate_parameters), {
-            ("path", "tpma"), ("querystring", "querystring"),
+        parameters = {(item["in"], item["name"]): item for item in rate_operation["parameters"]}
+        self.assertEqual(set(parameters), {
+            ("path", "tpma"), ("query", "provider"), ("query", "fyear"), ("query", "version"),
         })
-        rate_query_schema = query_schema(rate_operation)
-        self.assertEqual(set(rate_query_schema["properties"]), {"provider", "fyear", "version"})
-        self.assertEqual(rate_query_schema.get("required", []), [])
+        for field in ("provider", "fyear", "version"):
+            self.assertFalse(parameters[("query", field)].get("required", False))
         items = rate_operation["responses"]["200"]["content"]["application/json"]["schema"]["items"]
-        items = resolve_schema(items)
-        self.assertEqual(set(items["required"]), {"provider", "fyear", "denominator", "std_rate"})
-        demographic_operation = spec["paths"][
-            "/v1/providers/{provider}/demographic-factors"
-        ]["get"]
-        demographic_parameters = {
-            (parameter["in"], parameter["name"]): parameter
-            for parameter in demographic_operation["parameters"]
-        }
-        self.assertEqual(set(demographic_parameters), {
-            ("path", "provider"), ("querystring", "querystring"),
+        self.assertEqual(set(resolve_schema(items)["required"]), {"provider", "fyear", "denominator", "std_rate"})
+        demographic_operation = spec["paths"]["/v1/providers/{provider}/demographic-factors"]["get"]
+        parameters = {(item["in"], item["name"]): item for item in demographic_operation["parameters"]}
+        self.assertEqual(set(parameters), {
+            ("path", "provider"), ("query", "start_year"), ("query", "end_year"),
+            ("query", "variant"), ("query", "version"),
         })
-        demographic_query_schema = query_schema(demographic_operation)
-        self.assertEqual(set(demographic_query_schema["properties"]), {
-            "start_year", "end_year", "variant", "version",
+        for field in ("start_year", "end_year", "variant"):
+            self.assertTrue(parameters[("query", field)]["required"])
+        for path in spec["paths"].values():
+            self.assertNotIn("422", path["get"]["responses"])
+
+    def test_removed_routes_return_not_found(self):
+        for path in (
+            "/v1/tpmas/rates/provider/provider=R01/IP-AA-001",
+            "/v1/tpmas/rates/provider/fyear=202425/IP-AA-001",
+            "/v1/demographics/provider/R01/2024/2030/principal",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(self.client.get(path).status_code, 404)
+
+    def test_data_routes_reject_other_http_methods(self):
+        response = self.client.post("/v1/tpmas/IP-AA-001/rates", params={"fyear": "202425"})
+        self.assertEqual(response.status_code, 405)
+        self.assertIn("GET", response.headers["allow"])
+
+    def test_tpma_metadata_does_not_gain_unset_fields(self):
+        response = self.client.get("/v1/tpmas")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["IP-AA-001"], {
+            "name": "Example TPMA", "active_from": "v1.0",
         })
-        self.assertEqual(set(demographic_query_schema["required"]), {
-            "start_year", "end_year", "variant",
-        })
+
+    def test_invalid_response_data_is_a_server_error(self):
+        self.read_rates.return_value = pl.DataFrame({
+            "provider": ["R01"], "fyear": [202425],
+            "denominator": [100.0], "std_rate": ["invalid dataset value"],
+        }).lazy()
+        with self.assertLogs("openplan.api.v1.tpmas.rates", level="ERROR"):
+            response = self.request_rates({"provider": "R01"})
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(response.json(), {"error": "Internal server error"})
+        self.assertNotIn("invalid dataset value", response.text)
 
 
 if __name__ == "__main__":

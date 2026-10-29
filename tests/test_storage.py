@@ -3,10 +3,11 @@ import os
 import unittest
 from unittest.mock import patch
 
-import azure.functions as func
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 from openplan.api.v1 import data
-from openplan.api.v1.error_handling import handle_route_errors
+from openplan.api.v1.error_handling import register_error_handlers
 
 
 class StorageConfigurationTests(unittest.TestCase):
@@ -57,16 +58,19 @@ class StorageConfigurationTests(unittest.TestCase):
         self.assertEqual(client.call_args.kwargs["account_url"], "https://anotherstorage.blob.core.windows.net")
 
     def test_storage_configuration_errors_are_server_errors(self):
-        @handle_route_errors
+        app = FastAPI()
+        register_error_handlers(app)
+
+        @app.get("/storage")
         def route():
             data._read_azure_file("api/peers.json")
-            return func.HttpResponse("ok")
+            return {"status": "ok"}
 
-        with patch.dict(os.environ, {}, clear=True), patch.object(data, "BlobServiceClient") as client, self.assertLogs(__name__, level="ERROR"):
-            response = route()
-        client.assert_not_called()
+        with patch.dict(os.environ, {}, clear=True), patch.object(data, "BlobServiceClient") as storage, TestClient(app, raise_server_exceptions=False) as client, self.assertLogs(__name__, level="ERROR"):
+            response = client.get("/storage")
+        storage.assert_not_called()
         self.assertEqual(response.status_code, 500)
-        self.assertEqual(json.loads(response.get_body()), {"error": "Internal server error"})
+        self.assertEqual(response.json(), {"error": "Internal server error"})
 
 
 if __name__ == "__main__":

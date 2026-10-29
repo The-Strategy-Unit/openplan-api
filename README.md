@@ -3,11 +3,11 @@
 [![Project Status: WIP – Initial development is in progress, but there has not yet been a stable, usable release suitable for the public.](https://www.repostatus.org/badges/latest/wip.svg)](https://www.repostatus.org/#wip)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-This repository contains the API for OpenPlan, implemented as Azure Function Apps and secured with Microsoft Entra ID. The code exposes structured data and reference endpoints for planning and analytical workflows, and includes an OpenAPI definition for interactive documentation.
+This repository contains the API for OpenPlan, implemented with FastAPI, hosted on Azure Functions, and secured with Microsoft Entra ID. The code exposes structured data and reference endpoints for planning and analytical workflows, with generated OpenAPI and interactive documentation.
 
 ## Overview
 
-OpenPlan API provides a lightweight HTTP layer built on Azure Functions for access to OpenPlan datasets and reference information. The service currently includes:
+OpenPlan API uses FastAPI for routing, parameter validation, response validation, and OpenAPI generation. Azure Functions provides hosting through its ASGI adapter. The service currently includes:
 
 - provider and reference lookups
 - demographic data endpoints
@@ -18,7 +18,8 @@ The deployment locations and environment details are intentionally not described
 
 ## Repository structure
 
-- `function_app.py` — Azure Functions app entry point and route registration
+- `function_app.py` — Azure Functions ASGI entry point
+- `openplan/api/app.py` — FastAPI application and router registration
 - `openplan/` — application modules and API route handlers
 - `infrastructure/` — infrastructure-as-code for Azure resources
 - `host.json` and `local.settings.json` — Azure Functions runtime configuration
@@ -41,7 +42,10 @@ This project targets Python 3.14.
 4. Start the Azure Functions host locally:
    - `func start`
 
-Once running, the API exposes OpenAPI and Swagger endpoints through the Azure Functions app.
+Once running, `/openapi.json` and `/docs` expose FastAPI's generated OpenAPI and
+Swagger UI through the Azure Functions app. Route signatures and Pydantic models
+define parameters and response schemas; a small shared customization documents
+the Entra authentication boundary and the established 400 validation status.
 
 ## Dataset storage configuration
 
@@ -152,14 +156,19 @@ uv run pytest -vv
 ```
 
 Pytest runs the `unittest`-based regression tests with synthetic datasets and real
-Polars transformations. The development dependency group supplies pytest and
-Polars' compatibility runtime for machines without AVX support. These dependencies
-are installed by `uv sync`; they are not added to the production requirements.
-The tests do not require Azure credentials or live storage.
+Polars transformations. HTTP tests use FastAPI's TestClient; adapter tests also
+invoke the registered Azure Function to verify request parsing, response bodies,
+and errors through the hosting boundary. The development dependency group supplies
+pytest, the TestClient dependency `httpx2`, and Polars' compatibility runtime for
+machines without AVX support. These dependencies are installed by `uv sync`; they
+are not added to the production requirements. The tests block unexpected Azure
+storage access and do not require credentials or live datasets.
 
 ## Security
 
-This repository contains Azure Function Apps secured with Microsoft Entra ID. Authentication and authorization are enforced at the application boundary; access to deployed resources is managed through Microsoft Entra ID-based identity configuration.
+The Azure Functions app is secured with Microsoft Entra ID through Easy Auth.
+Functions-key authentication remains anonymous; deployed requests pass through
+Easy Auth before reaching FastAPI.
 
 OpenAPI declares an `EntraBearer` JWT bearer scheme for the deployed API. In
 Swagger UI, use **Authorize** to supply an Entra access token for the API's
@@ -170,7 +179,8 @@ Local Functions hosting does not reproduce Easy Auth.
 
 ## Response and error contracts
 
-OpenAPI describes rate rows, provider/TPMA catalogues, demographic factors,
+FastAPI validates responses against the same models used by OpenAPI to describe
+rate rows, provider/TPMA catalogues, demographic factors,
 health, and discovery responses. Demographic responses contain `population` and
 `births`, each with `baseline` and `horizon` maps keyed by sex and age. JSON map
 keys are strings; factor values may be numeric or null when missing in the input.
