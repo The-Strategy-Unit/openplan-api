@@ -2,6 +2,9 @@ name: Linting and Type checking
 
 on: pull_request
 
+permissions:
+  contents: read
+
 jobs:
   ruff-check:
     runs-on: ubuntu-latest
