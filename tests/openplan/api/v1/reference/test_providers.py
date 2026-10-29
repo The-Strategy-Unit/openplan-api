@@ -95,10 +95,9 @@ def test_ProviderCode(mocker):
     # act & assert
     assert provider_code_adapter.validate_python("R00") == "R00"
     assert provider_code_adapter.validate_python("A0A0A") == "A0A0A"
-    with pytest.raises(ValidationError):
-        provider_code_adapter.validate_python("b")
-        provider_code_adapter.validate_python("R01")
-        provider_code_adapter.validate_python("A0A0AA")
+    for invalid in ("b", "R01", "A0A0AA"):
+        with pytest.raises(ValidationError):
+            provider_code_adapter.validate_python(invalid)
 
 
 def test_provider_path_validate(mocker):
