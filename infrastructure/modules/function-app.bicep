@@ -21,6 +21,12 @@ param hostStorageName string
 @description('Name of the private deployment container in host storage.')
 param deploymentContainerName string
 
+@description('Name of the existing storage account containing OpenPlan datasets.')
+param dataStorageAccountName string
+
+@description('Name of the existing blob container containing OpenPlan datasets.')
+param dataStorageContainerName string
+
 @description('Application Insights connection string.')
 @secure()
 param appInsightsConnectionString string
@@ -88,6 +94,14 @@ resource functionApp 'Microsoft.Web/sites@2025-03-01' = {
         {
           name: 'AZURE_CLIENT_ID'
           value: identityClientId
+        }
+        {
+          name: 'OPENPLAN_STORAGE_ACCOUNT_NAME'
+          value: dataStorageAccountName
+        }
+        {
+          name: 'OPENPLAN_STORAGE_CONTAINER_NAME'
+          value: dataStorageContainerName
         }
       ]
     }

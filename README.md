@@ -34,10 +34,44 @@ This project targets Python 3.14.
 2. Install dependencies:
    - `pip install -r requirements.txt`
    - or `uv sync`
-3. Start the Azure Functions host locally:
+3. Set `OPENPLAN_STORAGE_ACCOUNT_NAME` and `OPENPLAN_STORAGE_CONTAINER_NAME` in
+   the `Values` section of your `local.settings.json`. Use
+   [local.settings.example.json](local.settings.example.json) as a template and
+   replace the example names with your dataset storage account and container.
+4. Start the Azure Functions host locally:
    - `func start`
 
 Once running, the API exposes OpenAPI and Swagger endpoints through the Azure Functions app.
+
+## Dataset storage configuration
+
+Dataset storage is configured through environment variables:
+
+| Variable | Meaning |
+| --- | --- |
+| `OPENPLAN_STORAGE_ACCOUNT_NAME` | Existing Azure storage account name, without a URL or path |
+| `OPENPLAN_STORAGE_CONTAINER_NAME` | Existing blob container containing OpenPlan datasets |
+
+Both are required for data reads; there is no default storage account or
+container. The account name determines the public Azure Blob endpoint
+`https://<account>.blob.core.windows.net`. Authentication continues to use
+`DefaultAzureCredential`, including the configured managed identity in Azure.
+Blob names such as `api/peers.json` are relative to the selected container.
+
+Azure Functions loads local values from `local.settings.json`. When running
+Python directly, export the two variables in your shell. Restart the host after
+changing storage settings to clear its dataset caches. Health and OpenAPI do not
+require dataset storage configuration, and unit tests use synthetic storage.
+
+For deployment, `infrastructure/create.sh` reads these same two variables and
+also requires `OPENPLAN_STORAGE_RESOURCE_GROUP`, the resource group containing
+the dataset account. The script passes the account and container into Bicep app
+settings and uses those same values to grant the managed identity read access.
+The Function host/deployment storage remains a separate infrastructure resource.
+
+Existing deployments need the two new application settings before publishing
+this code. The deployment script supplies them; manual deployments must set
+them explicitly. The tracked `local.settings.json` is not changed automatically.
 
 ## API endpoints
 

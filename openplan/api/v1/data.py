@@ -6,16 +6,19 @@ import polars as pl
 from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient
 
+from openplan.api.v1.settings import get_storage_settings
+
 credential = DefaultAzureCredential()
 
 
 def _read_azure_file(file: str) -> BytesIO:
+    settings = get_storage_settings()
     blob_service_client = BlobServiceClient(
-        account_url="https://nhpsa.blob.core.windows.net",
+        account_url=settings.account_url,
         credential=credential,
     )
 
-    container_client = blob_service_client.get_container_client("inputs-data")
+    container_client = blob_service_client.get_container_client(settings.container_name)
     blob_client = container_client.get_blob_client(file)
     download_stream = blob_client.download_blob()
 

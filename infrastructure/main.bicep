@@ -12,6 +12,16 @@ param location string = resourceGroup().location
 @description('Client ID of the existing Entra app registration used by Easy Auth.')
 param entraClientId string
 
+@description('Name of the existing storage account containing OpenPlan datasets.')
+@minLength(3)
+@maxLength(24)
+param dataStorageAccountName string
+
+@description('Name of the existing blob container containing OpenPlan datasets.')
+@minLength(3)
+@maxLength(63)
+param dataStorageContainerName string
+
 @description('Maximum number of Flex Consumption instances.')
 @minValue(1)
 param maximumInstanceCount int = 100
@@ -77,6 +87,9 @@ module functionApp 'modules/function-app.bicep' = {
     deploymentContainerName: hostStorage.outputs.containerName
 
     appInsightsConnectionString: monitoring.outputs.connectionString
+
+    dataStorageAccountName: dataStorageAccountName
+    dataStorageContainerName: dataStorageContainerName
 
     pythonVersion: pythonVersion
     maximumInstanceCount: maximumInstanceCount

@@ -11,6 +11,7 @@ tests/
 
 # Local configuration and development files
 local.settings.json
+local.settings.example.json
 .env
 .env.*
 !.env.example
