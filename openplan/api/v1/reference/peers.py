@@ -5,15 +5,17 @@ from typing import Any
 import azure.functions as func
 from azure_functions_openapi import openapi
 from packaging.version import Version
+from pydantic import JsonValue, TypeAdapter
 
 from openplan.api.v1.data import read_azure_json_file
-from openplan.api.v1.error_handling import error_response, handle_route_errors
+from openplan.api.v1.error_handling import DATA_ERROR_RESPONSES, error_response, handle_route_errors
 from openplan.api.v1.models import VersionQuery
 from openplan.api.v1.reference.providers import ProviderPath
 from openplan.api.v1.settings import CURRENT_APP_VERSION
 
 bp = func.Blueprint()
 logger = logging.getLogger(__name__)
+PeersResponseSchema = TypeAdapter(JsonValue).json_schema()
 
 
 def _get_peers(provider: str, version: Version | str | None = None) -> Any:
@@ -40,17 +42,19 @@ def _get_peers(provider: str, version: Version | str | None = None) -> Any:
 @bp.route("v1/reference/peers/{provider}", methods=["GET"])
 @openapi(
     summary="List peer organisations for a provider",
-    description="Returns the peer organisations available for the requested provider and version.",
+    description=(
+        "Returns the publisher-defined peer set for the requested provider and dataset version. "
+        "The payload is JSON; a narrower peer-set structure has not yet been specified."
+    ),
     tags=["Reference"],
     path=ProviderPath,
     querystring=VersionQuery,
     responses={
         200: {
             "description": "Successful response",
-            "content": {"application/json": {"schema": {"type": "object"}}},
+            "content": {"application/json": {"schema": PeersResponseSchema}},
         },
-        400: {"description": "Invalid request parameters"},
-        404: {"description": "No peer set available for this provider and dataset version"},
+        **DATA_ERROR_RESPONSES,
     },
 )
 @handle_route_errors

@@ -161,6 +161,39 @@ The tests do not require Azure credentials or live storage.
 
 This repository contains Azure Function Apps secured with Microsoft Entra ID. Authentication and authorization are enforced at the application boundary; access to deployed resources is managed through Microsoft Entra ID-based identity configuration.
 
+OpenAPI declares an `EntraBearer` JWT bearer scheme for the deployed API. In
+Swagger UI, use **Authorize** to supply an Entra access token for the API's
+configured audience. The deployed authentication settings currently redirect
+unauthenticated requests to Entra sign-in (302); rejected credentials can return
+401. Those platform responses have no application JSON error-body guarantee.
+Local Functions hosting does not reproduce Easy Auth.
+
+## Response and error contracts
+
+OpenAPI describes rate rows, provider/TPMA catalogues, demographic factors,
+health, and discovery responses. Demographic responses contain `population` and
+`births`, each with `baseline` and `horizon` maps keyed by sex and age. JSON map
+keys are strings; factor values may be numeric or null when missing in the input.
+Peer sets remain publisher-defined JSON until their narrower structure is
+confirmed; the API preserves that payload.
+
+Application-handled errors share these JSON shapes:
+
+```json
+{"error": "Dataset not found"}
+```
+
+Parameter validation errors additionally identify affected fields:
+
+```json
+{"error": "Invalid request parameters", "details": [{"field": "version", "message": "Invalid value"}]}
+```
+
+The documented application statuses are 400 for request validation, 404 for
+missing resources, 500 for data-processing or unexpected server failures, and
+503 for storage connection failures. Internal exception details are logged on
+the server and are not included in server-error responses.
+
 ## License
 
 This project is licensed under the MIT License. See [LICENSE](./LICENSE) for details.

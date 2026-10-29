@@ -7,7 +7,8 @@ from azure_functions_openapi import openapi
 from pydantic import Field, field_validator
 
 from openplan.api.v1.data import read_azure_csv_file
-from openplan.api.v1.error_handling import handle_route_errors
+from openplan.api.v1.demographics.models import DemographicFactorsResponse
+from openplan.api.v1.error_handling import DATA_ERROR_RESPONSES, handle_route_errors
 from openplan.api.v1.models import VersionQuery
 from openplan.api.v1.reference.providers import ProviderPath
 
@@ -80,11 +81,8 @@ def get_demographic_factors(
     path=ProviderPath,
     querystring=DemographicFactorsQuery,
     responses={
-        200: {
-            "description": "Successful response",
-            "content": {"application/json": {"schema": {"type": "object"}}},
-        },
-        400: {"description": "Invalid request parameters"},
+        200: DemographicFactorsResponse,
+        **DATA_ERROR_RESPONSES,
     },
 )
 @handle_route_errors

@@ -8,7 +8,7 @@ from packaging.version import Version
 from pydantic import AfterValidator, BaseModel, Field, TypeAdapter, ValidationInfo
 
 from openplan.api.v1.data import read_azure_json_file
-from openplan.api.v1.error_handling import handle_route_errors
+from openplan.api.v1.error_handling import DATA_ERROR_RESPONSES, handle_route_errors
 from openplan.api.v1.models import VersionQuery, validation_version
 from openplan.api.v1.settings import CURRENT_APP_VERSION
 
@@ -41,10 +41,6 @@ ProviderCode = Annotated[ProviderIdentifier, AfterValidator(validate_provider)]
 
 class ProviderPath(BaseModel):
     provider: ProviderCode
-
-
-class ProvidersResponseModel(BaseModel):
-    model_config = {"extra": "allow"}
 
 
 ProvidersResponseSchema = TypeAdapter(dict[str, str]).json_schema()
@@ -87,7 +83,7 @@ def is_valid_provider(provider: str, version: Version | str | None = None) -> bo
                 }
             },
         },
-        400: {"description": "Invalid request parameters"},
+        **DATA_ERROR_RESPONSES,
     },
 )
 @handle_route_errors

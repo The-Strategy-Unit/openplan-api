@@ -7,7 +7,7 @@ import polars as pl
 from azure_functions_openapi import openapi
 
 from openplan.api.v1.data import read_azure_parquet_file
-from openplan.api.v1.error_handling import handle_route_errors
+from openplan.api.v1.error_handling import DATA_ERROR_RESPONSES, handle_route_errors
 from openplan.api.v1.tpmas import TPMAPath
 from openplan.api.v1.tpmas.models import RatesQuery, RatesResponseSchema
 
@@ -54,7 +54,7 @@ def get_tpma_rates(
                 }
             },
         },
-        400: {"description": "Invalid request parameters"},
+        **DATA_ERROR_RESPONSES,
     },
 )
 @handle_route_errors

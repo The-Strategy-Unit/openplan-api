@@ -12,7 +12,12 @@ from openplan.api.v1.discovery.models import (
     RateAvailabilityResponse,
     VersionsResponse,
 )
-from openplan.api.v1.error_handling import error_response, handle_route_errors
+from openplan.api.v1.error_handling import (
+    DATA_ERROR_RESPONSES,
+    METADATA_ERROR_RESPONSES,
+    error_response,
+    handle_route_errors,
+)
 from openplan.api.v1.models import VersionQuery
 from openplan.api.v1.reference.providers import ProviderPath
 from openplan.api.v1.tpmas import TPMAPath
@@ -41,7 +46,7 @@ def _read_manifest(version: str) -> DatasetManifest:
     summary="List published dataset releases",
     description="Returns releases from the publisher's index, including publication time and source.",
     tags=["Discovery"],
-    responses={200: VersionsResponse},
+    responses={200: VersionsResponse, **METADATA_ERROR_RESPONSES},
 )
 @handle_route_errors
 def route_versions(req: func.HttpRequest) -> func.HttpResponse:
@@ -57,7 +62,7 @@ def route_versions(req: func.HttpRequest) -> func.HttpResponse:
     summary="Get available TPMA rate selections",
     description="Lists valid provider and financial-year combinations for the selected dataset release.",
     tags=["Discovery"], path=TPMAPath, querystring=VersionQuery,
-    responses={200: RateAvailabilityResponse},
+    responses={200: RateAvailabilityResponse, **DATA_ERROR_RESPONSES},
 )
 @handle_route_errors
 def route_rate_availability(req: func.HttpRequest) -> func.HttpResponse:
@@ -84,7 +89,7 @@ def route_rate_availability(req: func.HttpRequest) -> func.HttpResponse:
     summary="Get available demographic selections",
     description="Lists valid start-year, variant, and horizon-year combinations for both population and births.",
     tags=["Discovery"], path=ProviderPath, querystring=VersionQuery,
-    responses={200: DemographicAvailabilityResponse},
+    responses={200: DemographicAvailabilityResponse, **DATA_ERROR_RESPONSES},
 )
 @handle_route_errors
 def route_demographic_availability(req: func.HttpRequest) -> func.HttpResponse:

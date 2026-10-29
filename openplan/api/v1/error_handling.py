@@ -1,4 +1,3 @@
-import json
 import logging
 import re
 from collections.abc import Callable
@@ -13,7 +12,44 @@ from azure.core.exceptions import (
     ServiceRequestError,
     ServiceResponseError,
 )
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
+
+
+class ErrorResponse(BaseModel):
+    error: str
+
+
+class ParameterError(BaseModel):
+    field: str
+    message: str
+
+
+class ValidationErrorResponse(ErrorResponse):
+    details: list[ParameterError]
+
+
+DATA_ERROR_RESPONSES = {
+    400: {
+        "description": "Invalid request parameters",
+        "content": {"application/json": {"schema": ValidationErrorResponse}},
+    },
+    404: {
+        "description": "Resource or dataset not found",
+        "content": {"application/json": {"schema": ErrorResponse}},
+    },
+    500: {
+        "description": "The server could not read or process the dataset",
+        "content": {"application/json": {"schema": ErrorResponse}},
+    },
+    503: {
+        "description": "Data service temporarily unavailable",
+        "content": {"application/json": {"schema": ErrorResponse}},
+    },
+}
+
+METADATA_ERROR_RESPONSES = {
+    status: DATA_ERROR_RESPONSES[status] for status in (404, 500, 503)
+}
 
 
 def is_valid_fyear(fyear: str) -> bool:
@@ -29,7 +65,7 @@ def is_valid_version(version: str) -> bool:
 
 def error_response(message: str, status_code: int) -> func.HttpResponse:
     return func.HttpResponse(
-        json.dumps({"error": message}),
+        ErrorResponse(error=message).model_dump_json(),
         status_code=status_code,
         mimetype="application/json",
     )
@@ -44,12 +80,9 @@ def validation_error_response(exc: ValidationError) -> func.HttpResponse:
         for err in exc.errors()
     ]
     return func.HttpResponse(
-        json.dumps(
-            {
-                "error": "Invalid request parameters",
-                "details": details,
-            }
-        ),
+        ValidationErrorResponse(
+            error="Invalid request parameters", details=details,
+        ).model_dump_json(),
         status_code=400,
         mimetype="application/json",
     )

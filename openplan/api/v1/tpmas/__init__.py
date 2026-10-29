@@ -8,7 +8,7 @@ from packaging.version import Version
 from pydantic import AfterValidator, BaseModel, Field, TypeAdapter, ValidationInfo
 
 from openplan.api.v1.data import read_azure_json_file
-from openplan.api.v1.error_handling import handle_route_errors
+from openplan.api.v1.error_handling import DATA_ERROR_RESPONSES, handle_route_errors
 from openplan.api.v1.models import VersionQuery, validation_version
 from openplan.api.v1.settings import CURRENT_APP_VERSION
 
@@ -87,7 +87,7 @@ def is_valid_tpma(tpma: str, version: Version | str | None = None) -> bool:
                 }
             },
         },
-        400: {"description": "Invalid request parameters"},
+        **DATA_ERROR_RESPONSES,
     },
 )
 @handle_route_errors
