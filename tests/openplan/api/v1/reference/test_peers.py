@@ -1,16 +1,8 @@
-from unittest.mock import Mock
-
 import azure.functions as func
 import pytest
 from packaging.version import Version
 
 from openplan.api.v1.reference import peers
-
-
-def mock_version_validate(x):
-    m = Mock()
-    m.version = x["version"]
-    return m
 
 
 @pytest.fixture

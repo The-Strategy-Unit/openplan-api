@@ -8,12 +8,6 @@ from pydantic import TypeAdapter, ValidationError
 from openplan.api.v1.reference import providers
 
 
-def mock_version_validate(x):
-    m = Mock()
-    m.version = x["version"]
-    return m
-
-
 def test__get_providers(mocker):
     # arrange
     v = {"a": "A", "b": "B"}
