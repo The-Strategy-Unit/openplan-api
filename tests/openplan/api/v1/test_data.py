@@ -1,10 +1,13 @@
 from io import BytesIO
 
-from openplan.api.v1 import data
+from openplan.api.v1 import data, settings
 
 
 def test_read_azure_file(mocker):
     # arrange
+    settings.BLOB_STORAGE_ACCOUNT = "test_account"
+    settings.BLOB_STORAGE_CONTAINER = "test_container"
+
     mocker.patch(
         "openplan.api.v1.data.DefaultAzureCredential", return_value="credential"
     )
@@ -23,9 +26,10 @@ def test_read_azure_file(mocker):
 
     # assert
     blob_service_client_mock.assert_called_once_with(
-        account_url="https://nhpsa.blob.core.windows.net", credential="credential"
+        account_url=f"https://{settings.BLOB_STORAGE_ACCOUNT}.blob.core.windows.net",
+        credential="credential",
     )
-    container_client_mock.assert_called_once_with("inputs-data")
+    container_client_mock.assert_called_once_with(settings.BLOB_STORAGE_CONTAINER)
     blob_client_mock.assert_called_once_with("file")
     download_blob_mock.assert_called_once()
 

@@ -57,3 +57,17 @@ def test_max_horizon_year_without_envvar_set(monkeypatch):
 
     importlib.reload(settings)
     assert settings.MAX_HORIZON_YEAR == 2047
+
+
+def test_blob_storage_account_with_envvar_set(monkeypatch):
+    monkeypatch.setenv("BLOB_STORAGE_ACCOUNT", "test_account")
+
+    importlib.reload(settings)
+    assert settings.BLOB_STORAGE_ACCOUNT == "test_account"
+
+
+def test_blob_storage_container_with_envvar_set(monkeypatch):
+    monkeypatch.setenv("BLOB_STORAGE_CONTAINER", "test_container")
+
+    importlib.reload(settings)
+    assert settings.BLOB_STORAGE_CONTAINER == "test_container"
