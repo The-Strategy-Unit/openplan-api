@@ -42,7 +42,7 @@ def find_unhandled_routes(root: Path) -> list[tuple[Path, int, str]]:
 
 
 def test_all_routes_handle_errors():
-    violations = find_unhandled_routes(Path("openplan"))
+    violations = find_unhandled_routes(Path("src/openplan"))
 
     assert not violations, "\n".join(
         f"{path}:{line}: {name} is missing @handle_route_errors"
