@@ -8,9 +8,8 @@ from pydantic import BaseModel, Field, field_validator
 
 from openplan.api.v1.data import read_azure_csv_file
 from openplan.api.v1.handle_route_errors import handle_route_errors
-from openplan.api.v1.models.version import VersionQuery
+from openplan.api.v1.models.version import VersionQuery, version_query_validate
 from openplan.api.v1.reference.providers import ProviderCode
-from openplan.api.v1.settings import CURRENT_APP_VERSION
 
 bp = func.Blueprint()
 logger = logging.getLogger(__name__)
@@ -90,9 +89,7 @@ def get_demographic_factors(
 )
 @handle_route_errors
 def route_demographic_factors(req: func.HttpRequest) -> func.HttpResponse:
-    version = VersionQuery.model_validate(
-        {"version": req.params.get("version", CURRENT_APP_VERSION)}
-    ).version
+    version = version_query_validate(req)
     route_params = DemographicFactorsPath.model_validate(
         {
             "provider": req.route_params.get("provider"),

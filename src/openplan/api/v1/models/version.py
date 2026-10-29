@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 
+import azure.functions as func
 from pydantic import BaseModel, Field, field_validator
 
 from openplan.api.v1.settings import CURRENT_APP_VERSION
@@ -23,3 +24,9 @@ class VersionQuery(BaseModel):
     @staticmethod
     def is_valid_version(version: str) -> bool:
         return bool(re.match(r"^(dev|v\d+\.\d+(\.\d+)?)$", version))
+
+
+def version_query_validate(req: func.HttpRequest) -> str:
+    return VersionQuery.model_validate(
+        {"version": req.params.get("version", CURRENT_APP_VERSION)}
+    ).version

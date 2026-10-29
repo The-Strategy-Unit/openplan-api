@@ -9,8 +9,7 @@ from pydantic import AfterValidator, BaseModel, Field, TypeAdapter, ValidationIn
 
 from openplan.api.v1.data import read_azure_json_file
 from openplan.api.v1.handle_route_errors import handle_route_errors
-from openplan.api.v1.models.version import VersionQuery
-from openplan.api.v1.settings import CURRENT_APP_VERSION
+from openplan.api.v1.models.version import VersionQuery, version_query_validate
 
 bp = func.Blueprint()
 logger = logging.getLogger(__name__)
@@ -42,9 +41,8 @@ def is_valid_provider(provider: str, version: Version | str | None = None) -> bo
     return provider in get_providers(version)
 
 
-def validate_provider(value: str, info: ValidationInfo | None = None) -> str:
-    version = info.context if info else None
-
+def validate_provider(value: str, info: ValidationInfo) -> str:
+    version = info.context
     if not is_valid_provider(value, version):
         raise ValueError("Not recognised as a valid provider code")
     return value
@@ -64,6 +62,15 @@ ProviderCode = Annotated[
 
 class ProviderPath(BaseModel):
     provider: ProviderCode
+
+
+def provider_path_validate(req: func.HttpRequest) -> tuple[ProviderCode, str]:
+    version = version_query_validate(req)
+    provider = ProviderPath.model_validate(
+        {"provider": req.route_params.get("provider")},
+        context=version,
+    ).provider
+    return provider, version
 
 
 @bp.route("v1/reference/providers", methods=["GET"])
@@ -86,10 +93,7 @@ class ProviderPath(BaseModel):
 )
 @handle_route_errors
 def route_providers(req: func.HttpRequest) -> func.HttpResponse:
-    query_params = VersionQuery.model_validate(
-        {"version": req.params.get("version", CURRENT_APP_VERSION)}
-    )
-    version = query_params.version
+    version = version_query_validate(req)
 
     providers = get_providers(version)
     return func.HttpResponse(json.dumps(providers), mimetype="application/json")

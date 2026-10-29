@@ -9,8 +9,7 @@ from pydantic import AfterValidator, BaseModel, Field, TypeAdapter
 
 from openplan.api.v1.data import read_azure_json_file
 from openplan.api.v1.handle_route_errors import handle_route_errors
-from openplan.api.v1.models.version import VersionQuery
-from openplan.api.v1.settings import CURRENT_APP_VERSION
+from openplan.api.v1.models.version import VersionQuery, version_query_validate
 
 bp = func.Blueprint()
 logger = logging.getLogger(__name__)
@@ -89,10 +88,7 @@ def is_valid_tpma(tpma: str, version: Version | str | None = None) -> bool:
 )
 @handle_route_errors
 def route_tpmas(req: func.HttpRequest) -> func.HttpResponse:
-    query_params = VersionQuery.model_validate(
-        {"version": req.params.get("version", CURRENT_APP_VERSION)}
-    )
-    version = query_params.version
+    version = version_query_validate(req)
 
     tpmas = get_tpmas(version)
     return func.HttpResponse(json.dumps(tpmas), mimetype="application/json")
