@@ -1,6 +1,6 @@
 import pytest
 
-from openplan.api.v1.models.fyear import FinancialYearPath
+from openplan.api.v1.models.fyear import FinancialYearPath, financial_year_path_validate
 
 
 @pytest.mark.parametrize("fyear", ["199091", "199900", "200001", "202122"])
@@ -22,3 +22,15 @@ def test_FinancialYearPath_valid():
 def test_FinancialYearPath_invalid():
     with pytest.raises(ValueError):
         FinancialYearPath(fyear="199092")
+
+
+def test_financial_year_path_validate(mocker):
+    # arrange
+    req = mocker.Mock()
+    req.route_params = {"fyear": "202425"}
+
+    # act
+    actual = financial_year_path_validate(req)
+
+    # assert
+    assert actual == "202425"

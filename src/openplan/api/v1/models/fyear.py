@@ -1,5 +1,6 @@
 import re
 
+import azure.functions as func
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -25,3 +26,9 @@ class FinancialYearPath(BaseModel):
         start_year, end_year = int(m.group(1)), int(m.group(2))
 
         return (start_year + 1) % 100 == end_year
+
+
+def financial_year_path_validate(req: func.HttpRequest) -> str:
+    return FinancialYearPath.model_validate(
+        {"fyear": req.route_params.get("fyear")}
+    ).fyear
