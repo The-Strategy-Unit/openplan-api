@@ -5,17 +5,29 @@ from typing import Any
 import azure.functions as func
 import polars as pl
 from azure_functions_openapi import openapi
+from pydantic import BaseModel, TypeAdapter
 
 from openplan.api.v1.data import read_azure_parquet_file
 from openplan.api.v1.handle_route_errors import handle_route_errors
-from openplan.api.v1.models.fyear import FinancialYearPath
-from openplan.api.v1.models.version import VersionQuery, version_query_validate
+from openplan.api.v1.models.fyear import FinancialYearPath, financial_year_path_validate
+from openplan.api.v1.models.version import VersionQuery
 from openplan.api.v1.reference.providers import ProviderPath, provider_path_validate
-from openplan.api.v1.tpmas import TPMAPath
-from openplan.api.v1.tpmas.models import RatesByFyear, RatesByProvider
+from openplan.api.v1.tpmas import tpma_path_validate
 
 bp = func.Blueprint()
 logger = logging.getLogger(__name__)
+
+
+class RateByProvider(BaseModel):
+    fyear: int
+    denominator: float
+    std_rate: float
+
+
+class RateByFyear(BaseModel):
+    provider: str
+    denominator: float
+    std_rate: float
 
 
 def get_tpma_rates_for_provider(
@@ -60,7 +72,7 @@ def get_tpma_rates_for_fyear(
             "description": "Successful response",
             "content": {
                 "application/json": {
-                    "schema": RatesByProvider,
+                    "schema": TypeAdapter(list[RateByProvider]).json_schema(),
                 }
             },
         },
@@ -71,7 +83,7 @@ def get_tpma_rates_for_fyear(
 def route_tpma_rates_for_provider(req: func.HttpRequest) -> func.HttpResponse:
     provider, version = provider_path_validate(req)
 
-    tpma = TPMAPath.model_validate({"tpma": req.route_params.get("tpma")}).tpma
+    tpma = tpma_path_validate(req)[0]
 
     logger.info(
         "Request for rates by provider: version=%s, provider=%s, tpma=%s",
@@ -96,7 +108,7 @@ def route_tpma_rates_for_provider(req: func.HttpRequest) -> func.HttpResponse:
             "description": "Successful response",
             "content": {
                 "application/json": {
-                    "schema": RatesByFyear,
+                    "schema": TypeAdapter(list[RateByFyear]).json_schema(),
                 }
             },
         },
@@ -105,11 +117,8 @@ def route_tpma_rates_for_provider(req: func.HttpRequest) -> func.HttpResponse:
 )
 @handle_route_errors
 def route_tpma_rates_for_fyear(req: func.HttpRequest) -> func.HttpResponse:
-    version = version_query_validate(req)
-    fyear = FinancialYearPath.model_validate(
-        {"fyear": req.route_params.get("fyear")}
-    ).fyear
-    tpma = TPMAPath.model_validate({"tpma": req.route_params.get("tpma")}).tpma
+    fyear = financial_year_path_validate(req)
+    tpma, version = tpma_path_validate(req)
 
     fyear_int = int(fyear)
 
