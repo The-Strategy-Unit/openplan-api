@@ -26,14 +26,15 @@ def validate_tpma(value: str, info: ValidationInfo) -> str:
     return value
 
 
-TPMACode = Annotated[
+TPMAIdentifier = Annotated[
     str,
     Field(
         pattern=r"^(IP|OP|AE)-(AA|EF)-\d{3}$",
         description="TPMA code.",
     ),
-    AfterValidator(validate_tpma),
 ]
+
+TPMACode = Annotated[TPMAIdentifier, AfterValidator(validate_tpma)]
 
 
 class TPMAPath(BaseModel):

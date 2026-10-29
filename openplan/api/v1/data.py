@@ -36,5 +36,9 @@ def read_azure_csv_file(file: str) -> pl.LazyFrame:
 
 @cache
 def read_azure_json_file(file: str) -> dict:
+    return read_azure_json_file_uncached(file)
+
+
+def read_azure_json_file_uncached(file: str) -> dict:
     with _read_azure_file(file) as f:
         return json.load(f)

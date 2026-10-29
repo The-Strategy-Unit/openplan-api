@@ -48,6 +48,9 @@ and defaults to `dev`.
 | Purpose             | Path                                           | Selection parameters                           |
 | ------------------- | ---------------------------------------------- | ---------------------------------------------- |
 | Application liveness | `/health` | None |
+| Dataset releases | `/v1/reference/versions` | None |
+| Rate availability | `/v1/tpmas/{tpma}/rates/availability` | `version` |
+| Demographic availability | `/v1/providers/{provider}/demographic-factors/availability` | `version` |
 | Provider catalogue  | `/v1/reference/providers`                      | `version`                                      |
 | TPMA catalogue      | `/v1/tpmas`                                    | `version`                                      |
 | Provider peers      | `/v1/reference/peers/{provider}`               | `version`                                      |
@@ -80,6 +83,14 @@ an explicitly empty peer set remains a successful 200 response.
 `GET /health` returns `{"status":"ok"}` when the application is running. It does
 not contact storage or confirm dataset availability. Its response is not cached,
 and the deployed endpoint remains protected by the existing Entra authentication.
+
+Discovery endpoints expose publisher-supplied release metadata and valid query
+combinations. Rate selections group providers by financial year; demographic
+selections give start-year/variant pairs and their available horizon years.
+They also include publication time, provenance, and any supplied measure units.
+The data publisher must supply the [discovery manifests](docs/dataset-manifests.md)
+before these endpoints can serve a release. Synthetic examples and an offline
+validation command are included in that guide.
 
 Example requests (replace provider and TPMA codes with values from the catalogues):
 

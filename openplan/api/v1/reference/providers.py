@@ -26,16 +26,17 @@ def validate_provider(value: str, info: ValidationInfo) -> str:
     return value
 
 
-ProviderCode = Annotated[
+ProviderIdentifier = Annotated[
     str,
     Field(
         min_length=3,
         max_length=5,
-        pattern=r"^[A-Z0-9]{3}|([A-Z][0-9]){2}[A-Z]$",
+        pattern=r"^(?:[A-Z0-9]{3}|(?:[A-Z][0-9]){2}[A-Z])$",
         description="Provider ODS code.",
     ),
-    AfterValidator(validate_provider),
 ]
+
+ProviderCode = Annotated[ProviderIdentifier, AfterValidator(validate_provider)]
 
 
 class ProviderPath(BaseModel):
