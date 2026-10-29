@@ -115,11 +115,9 @@ def test_TPMACode(mocker):
     # act & assert
     for i in valid_tpmas:
         assert tpma_code_adapter.validate_python(i) == i
-    with pytest.raises(ValidationError):
-        tpma_code_adapter.validate_python("b")
-        tpma_code_adapter.validate_python("IP-X-001")
-        tpma_code_adapter.validate_python("IP-AA")
-        tpma_code_adapter.validate_python("IP-AA-011")
+    for invalid in ("b", "IP-X-001", "IP-AA", "IP-AA-011"):
+        with pytest.raises(ValidationError):
+            tpma_code_adapter.validate_python(invalid)
 
 
 def test_validate_tpma_path(mocker):
