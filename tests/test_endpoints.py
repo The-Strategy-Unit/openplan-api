@@ -85,6 +85,7 @@ class EndpointContractTests(unittest.TestCase):
         self.assertEqual(set(self.routes), {
             "openapi.json",
             "docs",
+            "health",
             "v1/reference/providers",
             "v1/reference/peers/{provider}",
             "v1/tpmas",

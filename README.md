@@ -47,6 +47,7 @@ and defaults to `dev`.
 
 | Purpose             | Path                                           | Selection parameters                           |
 | ------------------- | ---------------------------------------------- | ---------------------------------------------- |
+| Application liveness | `/health` | None |
 | Provider catalogue  | `/v1/reference/providers`                      | `version`                                      |
 | TPMA catalogue      | `/v1/tpmas`                                    | `version`                                      |
 | Provider peers      | `/v1/reference/peers/{provider}`               | `version`                                      |
@@ -76,6 +77,10 @@ Invalid parameters or codes outside the selected dataset version return 400.
 Peer queries return 404 when no peer set exists for that provider and version;
 an explicitly empty peer set remains a successful 200 response.
 
+`GET /health` returns `{"status":"ok"}` when the application is running. It does
+not contact storage or confirm dataset availability. Its response is not cached,
+and the deployed endpoint remains protected by the existing Entra authentication.
+
 Example requests (replace provider and TPMA codes with values from the catalogues):
 
 ```text
@@ -98,11 +103,14 @@ the earlier routes have no compatibility aliases.
 Run the endpoint regression tests from the repository root:
 
 ```bash
-uv run --locked python -m unittest discover -s tests -v
+uv run pytest -vv
 ```
 
-The tests use Python's standard-library `unittest`, synthetic datasets, and real
-Polars transformations. They do not require Azure credentials or live storage.
+Pytest runs the `unittest`-based regression tests with synthetic datasets and real
+Polars transformations. The development dependency group supplies pytest and
+Polars' compatibility runtime for machines without AVX support. These dependencies
+are installed by `uv sync`; they are not added to the production requirements.
+The tests do not require Azure credentials or live storage.
 
 ## Security
 

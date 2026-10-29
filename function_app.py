@@ -3,6 +3,7 @@ import logging
 import azure.functions as func
 from azure_functions_openapi import get_openapi_json, render_swagger_ui
 
+from openplan.api import health
 from openplan.api.v1 import demographics, tpmas
 from openplan.api.v1.reference import peers, providers
 from openplan.api.v1.tpmas import rates
@@ -26,6 +27,7 @@ def swagger_ui(req: func.HttpRequest) -> func.HttpResponse:
     return render_swagger_ui(openapi_url="/openapi.json")
 
 
+app.register_blueprint(health.bp)
 app.register_blueprint(peers.bp)
 app.register_blueprint(providers.bp)
 app.register_blueprint(rates.bp)
