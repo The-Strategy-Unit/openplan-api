@@ -9,8 +9,7 @@ from packaging.version import Version
 from openplan.api.v1.data import read_azure_json_file
 from openplan.api.v1.handle_route_errors import handle_route_errors
 from openplan.api.v1.models.version import VersionQuery
-from openplan.api.v1.reference.providers import ProviderPath
-from openplan.api.v1.settings import CURRENT_APP_VERSION
+from openplan.api.v1.reference.providers import ProviderPath, provider_path_validate
 
 bp = func.Blueprint()
 logger = logging.getLogger(__name__)
@@ -54,13 +53,7 @@ def _get_peers(provider: str, version: Version | str | None = None) -> Any:
 )
 @handle_route_errors
 def route_peers(req: func.HttpRequest) -> func.HttpResponse:
-    version = VersionQuery.model_validate(
-        {"version": req.params.get("version", CURRENT_APP_VERSION)}
-    ).version
-
-    provider = ProviderPath.model_validate(
-        {"provider": req.route_params.get("provider")}, context=version
-    ).provider
+    provider, version = provider_path_validate(req)
 
     peers = _get_peers(provider, version)
     return func.HttpResponse(json.dumps(peers), mimetype="application/json")

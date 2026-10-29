@@ -5,7 +5,6 @@ import pytest
 from packaging.version import Version
 from pydantic import TypeAdapter, ValidationError
 
-from openplan.api.v1 import settings
 from openplan.api.v1.reference import providers
 
 
@@ -81,13 +80,15 @@ def test_validate_provider(mocker):
         "openplan.api.v1.reference.providers.is_valid_provider",
         side_effect=lambda value, _info: value in ["a", "b", "c"],
     )
+    info = Mock()
+    info.context = "dev"
 
     # act & assert
     for value in ["a", "b", "c"]:
-        assert providers.validate_provider(value) == value
+        assert providers.validate_provider(value, info) == value
 
     with pytest.raises(ValueError):
-        providers.validate_provider("d")
+        providers.validate_provider("d", info)
 
 
 def test_ProviderCode(mocker):
@@ -106,34 +107,48 @@ def test_ProviderCode(mocker):
         provider_code_adapter.validate_python("A0A0AA")
 
 
-@pytest.mark.parametrize(
-    "params, expected", [({}, "dev"), ({"version": "v1.0.0"}, "v1.0.0")]
-)
-def test_route_providers(mocker, params, expected):
+def test_provider_path_validate(mocker):
     # arrange
-    import inspect
+    mock_version_validate = mocker.patch(
+        "openplan.api.v1.reference.providers.version_query_validate",
+        return_value="dev",
+    )
+    mock_validate_provider = mocker.patch(
+        "openplan.api.v1.reference.providers.is_valid_provider",
+        return_value=True,
+    )
+    req = Mock()
+    req.route_params = {"provider": "R00"}
 
-    route = inspect.unwrap(providers.route_providers)
+    # act
+    actual = providers.provider_path_validate(req)
 
-    settings.CURRENT_APP_VERSION = "dev"
+    # assert
+    assert actual == ("R00", "dev")
+    mock_version_validate.assert_called_once_with(req)
+    mock_validate_provider.assert_called_once_with("R00", "dev")
+
+
+def test_route_providers(mocker):
+    # arrange
     mock_get_providers = mocker.patch(
         "openplan.api.v1.reference.providers.get_providers",
         return_value=["a", "b", "c"],
     )
-    mock_version_query = mocker.patch(
-        "openplan.api.v1.reference.providers.VersionQuery",
+    mock_version_validate = mocker.patch(
+        "openplan.api.v1.reference.providers.version_query_validate",
+        return_value="dev",
     )
-    mock_version_query.model_validate.side_effect = mock_version_validate
 
     req = func.HttpRequest(
-        method="GET", url="/api/v1/reference/providers", body=b"", params=params
+        method="GET", url="/api/v1/reference/providers", body=b"", params={}
     )
 
     # act
-    resp = route(req)
+    resp = providers.route_providers(req)
 
     # assert
     assert resp.status_code == 200
     assert resp.get_body() == b'["a", "b", "c"]'
-    mock_get_providers.assert_called_once_with(expected)
-    mock_version_query.model_validate.assert_called_once_with({"version": expected})
+    mock_get_providers.assert_called_once_with("dev")
+    mock_version_validate.assert_called_once_with(req)

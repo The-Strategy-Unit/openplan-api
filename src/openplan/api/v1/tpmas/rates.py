@@ -9,9 +9,8 @@ from azure_functions_openapi import openapi
 from openplan.api.v1.data import read_azure_parquet_file
 from openplan.api.v1.handle_route_errors import handle_route_errors
 from openplan.api.v1.models.fyear import FinancialYearPath
-from openplan.api.v1.models.version import VersionQuery
-from openplan.api.v1.reference.providers import ProviderPath
-from openplan.api.v1.settings import CURRENT_APP_VERSION
+from openplan.api.v1.models.version import VersionQuery, version_query_validate
+from openplan.api.v1.reference.providers import ProviderPath, provider_path_validate
 from openplan.api.v1.tpmas import TPMAPath
 from openplan.api.v1.tpmas.models import RatesByFyear, RatesByProvider
 
@@ -70,13 +69,7 @@ def get_tpma_rates_for_fyear(
 )
 @handle_route_errors
 def route_tpma_rates_for_provider(req: func.HttpRequest) -> func.HttpResponse:
-    version = VersionQuery.model_validate(
-        {"version": req.params.get("version", CURRENT_APP_VERSION)}
-    ).version
-
-    provider = ProviderPath.model_validate(
-        {"provider": req.route_params.get("provider")}, context=version
-    ).provider
+    provider, version = provider_path_validate(req)
 
     tpma = TPMAPath.model_validate({"tpma": req.route_params.get("tpma")}).tpma
 
@@ -112,9 +105,7 @@ def route_tpma_rates_for_provider(req: func.HttpRequest) -> func.HttpResponse:
 )
 @handle_route_errors
 def route_tpma_rates_for_fyear(req: func.HttpRequest) -> func.HttpResponse:
-    version = VersionQuery.model_validate(
-        {"version": req.params.get("version", CURRENT_APP_VERSION)}
-    ).version
+    version = version_query_validate(req)
     fyear = FinancialYearPath.model_validate(
         {"fyear": req.route_params.get("fyear")}
     ).fyear
