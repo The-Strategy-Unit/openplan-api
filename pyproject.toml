@@ -11,6 +11,7 @@ dependencies = [
   "packaging>=26.3",
   "polars",
   "pydantic>=2.7,<3",
+  "python-dotenv>=1.2.4",
 ]
 
 [dependency-groups]
