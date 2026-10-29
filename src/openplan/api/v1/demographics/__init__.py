@@ -6,6 +6,7 @@ import polars as pl
 from azure_functions_openapi import openapi
 from pydantic import BaseModel, Field, field_validator
 
+from openplan.api.v1 import settings
 from openplan.api.v1.data import read_azure_csv_file
 from openplan.api.v1.handle_route_errors import handle_route_errors
 from openplan.api.v1.models.version import VersionQuery, version_query_validate
@@ -17,8 +18,18 @@ logger = logging.getLogger(__name__)
 
 class DemographicFactorsPath(BaseModel):
     provider: ProviderCode
-    start_year: int = Field(..., ge=1900, le=9999, description="Start year.")
-    end_year: int = Field(..., ge=1900, le=9999, description="End year.")
+    start_year: int = Field(
+        ...,
+        ge=settings.MIN_BASELINE_YEAR,
+        le=settings.MAX_BASELINE_YEAR,
+        description="Model baseline year.",
+    )
+    end_year: int = Field(
+        ...,
+        ge=settings.MIN_BASELINE_YEAR + 1,
+        le=settings.MAX_HORIZON_YEAR,
+        description="Model horizon year.",
+    )
     variant: str = Field(
         ...,
         min_length=1,
@@ -30,8 +41,8 @@ class DemographicFactorsPath(BaseModel):
     @classmethod
     def validate_end_year(cls, value: int, info) -> int:
         start_year = info.data.get("start_year")
-        if start_year is not None and value < start_year:
-            raise ValueError("end_year must be greater than or equal to start_year")
+        if start_year is not None and value <= start_year:
+            raise ValueError("end_year must be greater than start_year")
         return value
 
 
