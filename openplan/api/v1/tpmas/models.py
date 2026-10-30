@@ -1,13 +1,13 @@
 from typing import Self
 
-from pydantic import BaseModel, TypeAdapter, model_validator
+from pydantic import BaseModel, model_validator
 
 from openplan.api.v1.models import FinancialYear, VersionQuery
-from openplan.api.v1.reference.providers import ProviderCode
+from openplan.api.v1.reference.providers import ProviderIdentifier
 
 
 class RatesQuery(VersionQuery):
-    provider: ProviderCode | None = None
+    provider: ProviderIdentifier | None = None
     fyear: FinancialYear | None = None
 
     @model_validator(mode="after")
@@ -18,10 +18,8 @@ class RatesQuery(VersionQuery):
 
 
 class Rate(BaseModel):
+    model_config = {"allow_inf_nan": False}
     provider: str
     fyear: int
     denominator: float
     std_rate: float
-
-
-RatesResponseSchema = TypeAdapter(list[Rate]).json_schema()

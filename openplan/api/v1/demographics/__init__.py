@@ -1,17 +1,17 @@
-import json
 import logging
+from typing import Annotated
 
-import azure.functions as func
+from fastapi import APIRouter, Path, Query
 import polars as pl
-from azure_functions_openapi import openapi
 from pydantic import Field, field_validator
 
 from openplan.api.v1.data import read_azure_csv_file
-from openplan.api.v1.error_handling import handle_route_errors
+from openplan.api.v1.demographics.models import DemographicFactorsResponse
+from openplan.api.v1.error_handling import DATA_ERROR_RESPONSES
 from openplan.api.v1.models import VersionQuery
-from openplan.api.v1.reference.providers import ProviderPath
+from openplan.api.v1.reference.providers import ProviderIdentifier, validate_provider
 
-bp = func.Blueprint()
+router = APIRouter(tags=["Demographics"], responses=DATA_ERROR_RESPONSES)
 logger = logging.getLogger(__name__)
 
 
@@ -69,58 +69,26 @@ def get_demographic_factors(
     }
 
 
-@bp.route(
-    route="v1/providers/{provider}/demographic-factors",
-    methods=["GET"],
-)
-@openapi(
+@router.get(
+    "/v1/providers/{provider}/demographic-factors",
+    response_model=DemographicFactorsResponse,
     summary="Get demographic factors for a provider",
     description="Returns demographic factors for the specified provider and year range.",
-    tags=["Demographics"],
-    path=ProviderPath,
-    querystring=DemographicFactorsQuery,
-    responses={
-        200: {
-            "description": "Successful response",
-            "content": {"application/json": {"schema": {"type": "object"}}},
-        },
-        400: {"description": "Invalid request parameters"},
-    },
 )
-@handle_route_errors
-def route_demographic_factors(req: func.HttpRequest) -> func.HttpResponse:
-    query_params = DemographicFactorsQuery.model_validate(dict(req.params))
-    provider = ProviderPath.model_validate(
-        {"provider": req.route_params.get("provider")},
-        context={"version": query_params.version},
-    ).provider
-    version = query_params.version
-    start_year = query_params.start_year
-    end_year = query_params.end_year
-    variant = query_params.variant
-
+def route_demographic_factors(
+    provider: Annotated[ProviderIdentifier, Path()],
+    query: Annotated[DemographicFactorsQuery, Query()],
+) -> DemographicFactorsResponse:
+    validate_provider(provider, query.version)
     logger.info(
         "Request for demographic factors: version=%s, provider=%s, start_year=%d, end_year=%d, variant=%s",
-        version,
-        provider,
-        start_year,
-        end_year,
-        variant,
+        query.version, provider, query.start_year, query.end_year, query.variant,
     )
-
-    fyear = start_year * 100 + (start_year + 1) % 100
-
-    demog_factors = {
-        demog_type: get_demographic_factors(
-            version,
-            demog_type,
-            fyear,
-            provider,
-            variant,
-            start_year,
-            end_year,
+    fyear = query.start_year * 100 + (query.start_year + 1) % 100
+    factors = {
+        kind: get_demographic_factors(
+            query.version, kind, fyear, provider, query.variant, query.start_year, query.end_year,
         )
-        for demog_type in ["population", "births"]
+        for kind in ("population", "births")
     }
-
-    return func.HttpResponse(json.dumps(demog_factors), mimetype="application/json")
+    return DemographicFactorsResponse(**factors)

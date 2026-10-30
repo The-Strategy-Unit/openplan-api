@@ -3,7 +3,7 @@
 # azure-monitor-opentelemetry 
 
 azure-functions
-azure-functions-openapi
+fastapi
 azure-identity
 azure-storage-blob
 packaging>=26.3

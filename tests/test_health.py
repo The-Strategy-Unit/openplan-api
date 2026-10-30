@@ -2,23 +2,20 @@ import json
 import unittest
 from unittest.mock import patch
 
-import azure.functions as func
 
-from openplan.api import health
 from openplan.api.v1 import data
+from tests.support import HTTPTestCase
 
 
-class HealthTests(unittest.TestCase):
+class HealthTests(HTTPTestCase):
     def request(self):
-        return health.route_health(func.HttpRequest(
-            method="GET", url="http://localhost/health", body=b"",
-        ))
+        return self.client.get("/health")
 
     def test_health_returns_uncached_json(self):
         response = self.request()
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.mimetype, "application/json")
-        self.assertEqual(json.loads(response.get_body()), {"status": "ok"})
+        self.assertEqual(response.headers["content-type"], "application/json")
+        self.assertEqual(json.loads(response.content), {"status": "ok"})
         self.assertEqual(response.headers["Cache-Control"], "no-store")
 
     def test_health_does_not_depend_on_dataset_storage(self):

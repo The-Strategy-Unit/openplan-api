@@ -5,19 +5,20 @@ from pathlib import Path
 import unittest
 from unittest.mock import patch
 
-import azure.functions as func
 from azure.core.exceptions import ResourceNotFoundError, ServiceRequestError
 from pydantic import ValidationError
 
 from openplan.api.v1 import data, discovery, tpmas
 from openplan.api.v1.discovery.models import DatasetIndex, DatasetManifest
 from openplan.api.v1.reference import providers
+from tests.support import HTTPTestCase
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
 
 
-class DiscoveryTests(unittest.TestCase):
+class DiscoveryTests(HTTPTestCase):
     def setUp(self):
+        super().setUp()
         self.index = json.loads((EXAMPLES / "dataset-index.json").read_text())
         self.manifest = json.loads((EXAMPLES / "dataset-manifest.json").read_text())
         self.patch_attribute(providers, "_get_providers", return_value={
@@ -47,29 +48,23 @@ class DiscoveryTests(unittest.TestCase):
             return self.manifest
         raise ResourceNotFoundError("Synthetic missing metadata")
 
-    def request(self, handler, params=None, route_params=None):
-        return handler(func.HttpRequest(
-            method="GET", url="http://localhost/", body=b"",
-            params=params or {}, route_params=route_params or {},
-        ))
-
     def rate_request(self, version="v1.0", tpma="IP-AA-001"):
-        return self.request(discovery.route_rate_availability, {"version": version}, {"tpma": tpma})
+        return self.request("/v1/tpmas/{tpma}/rates/availability", {"version": version}, {"tpma": tpma})
 
     def demographic_request(self, version="v1.0", provider="R01"):
-        return self.request(discovery.route_demographic_availability, {"version": version}, {"provider": provider})
+        return self.request("/v1/providers/{provider}/demographic-factors/availability", {"version": version}, {"provider": provider})
 
     def test_versions_return_published_release_metadata(self):
-        response = self.request(discovery.route_versions)
+        response = self.request("/v1/reference/versions")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(json.loads(response.get_body()), {"versions": self.index["versions"]})
+        self.assertEqual(json.loads(response.content), {"versions": self.index["versions"]})
         self.assertEqual(response.headers["Cache-Control"], "no-store")
         self.read_metadata.assert_called_once_with("api/versions.json")
 
     def test_rate_availability_preserves_valid_combinations(self):
         response = self.rate_request()
         self.assertEqual(response.status_code, 200)
-        payload = json.loads(response.get_body())
+        payload = json.loads(response.content)
         self.assertEqual(payload["selections"], self.manifest["rates"]["IP-AA-001"]["selections"])
         self.assertEqual(payload["tpma"], "IP-AA-001")
         self.assertEqual(payload["version"], "v1.0")
@@ -80,7 +75,7 @@ class DiscoveryTests(unittest.TestCase):
     def test_demographic_availability_preserves_start_variant_horizon_combinations(self):
         response = self.demographic_request()
         self.assertEqual(response.status_code, 200)
-        payload = json.loads(response.get_body())
+        payload = json.loads(response.content)
         self.assertEqual(payload["selections"], self.manifest["demographics"]["R01"]["selections"])
         self.assertEqual(payload["provider"], "R01")
         self.assertEqual(payload["version"], "v1.0")
@@ -89,11 +84,11 @@ class DiscoveryTests(unittest.TestCase):
     def test_publisher_units_are_returned_without_interpretation(self):
         units = {"denominator": "Synthetic denominator unit", "std_rate": "Synthetic rate scale"}
         self.manifest["rates"]["IP-AA-001"]["units"] = units
-        self.assertEqual(json.loads(self.rate_request().get_body())["units"], units)
+        self.assertEqual(json.loads(self.rate_request().content)["units"], units)
 
     def test_default_version_uses_the_dev_manifest(self):
         self.manifest["version"] = "dev"
-        response = self.request(discovery.route_rate_availability, route_params={"tpma": "IP-AA-001"})
+        response = self.request("/v1/tpmas/{tpma}/rates/availability", route_params={"tpma": "IP-AA-001"})
         self.assertEqual(response.status_code, 200)
         self.read_metadata.assert_called_once_with("api/dev/manifest.json")
 
@@ -121,7 +116,7 @@ class DiscoveryTests(unittest.TestCase):
 
     def test_missing_metadata_blobs_return_not_found(self):
         self.read_metadata.side_effect = ResourceNotFoundError("Synthetic missing blob")
-        self.assertEqual(self.request(discovery.route_versions).status_code, 404)
+        self.assertEqual(self.request("/v1/reference/versions").status_code, 404)
         self.assertEqual(self.rate_request().status_code, 404)
         self.assertEqual(self.demographic_request().status_code, 404)
 
@@ -135,7 +130,7 @@ class DiscoveryTests(unittest.TestCase):
         with self.assertLogs("openplan.api.v1.discovery", level="ERROR"):
             response = self.rate_request()
         self.assertEqual(response.status_code, 500)
-        self.assertEqual(json.loads(response.get_body()), {"error": "Internal server error"})
+        self.assertEqual(json.loads(response.content), {"error": "Internal server error"})
 
     def test_manifest_version_must_match_its_requested_path(self):
         self.read_metadata.side_effect = None
@@ -147,8 +142,8 @@ class DiscoveryTests(unittest.TestCase):
         updated = deepcopy(self.index)
         updated["versions"].append(updated["versions"][0] | {"version": "v2.0"})
         self.read_metadata.side_effect = [self.index, updated]
-        self.assertEqual(len(json.loads(self.request(discovery.route_versions).get_body())["versions"]), 1)
-        self.assertEqual(len(json.loads(self.request(discovery.route_versions).get_body())["versions"]), 2)
+        self.assertEqual(len(json.loads(self.request("/v1/reference/versions").content)["versions"]), 1)
+        self.assertEqual(len(json.loads(self.request("/v1/reference/versions").content)["versions"]), 2)
 
     def test_example_metadata_validates_without_catalogue_access(self):
         with patch.object(providers, "_get_providers", side_effect=AssertionError("No catalogue reads")), \
