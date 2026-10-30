@@ -12,10 +12,11 @@ STORAGE_ENV = (
     "OPENPLAN_STORAGE_CONTAINER_NAME",
     "OPENPLAN_STORAGE_RESOURCE_GROUP",
 )
+CACHE_ENV = ("OPENPLAN_CACHE_TTL_SECONDS", "OPENPLAN_CACHE_MAX_BYTES")
 
 
 class DeploymentConfigurationTests(unittest.TestCase):
-    def run_script(self, missing=None):
+    def run_script(self, missing=None, cache_settings=None):
         with TemporaryDirectory() as directory:
             directory = Path(directory)
             log = directory / "commands.jsonl"
@@ -45,7 +46,7 @@ elif name == 'jq':
                 executable.write_text(command)
                 executable.chmod(0o755)
             environment = os.environ.copy()
-            for name in STORAGE_ENV:
+            for name in (*STORAGE_ENV, *CACHE_ENV):
                 environment.pop(name, None)
             environment.update({
                 # Only fake commands are on PATH; a test cannot invoke live Azure CLI.
@@ -55,6 +56,7 @@ elif name == 'jq':
                 "OPENPLAN_STORAGE_CONTAINER_NAME": "synthetic-inputs",
                 "OPENPLAN_STORAGE_RESOURCE_GROUP": "synthetic-data-rg",
             })
+            environment.update(cache_settings or {})
             if missing:
                 del environment[missing]
             result = subprocess.run(
@@ -80,12 +82,36 @@ elif name == 'jq':
         app = next(command for command in deployments if "infrastructure/main.bicep" in command)
         self.assertIn("dataStorageAccountName=syntheticstorage", app)
         self.assertIn("dataStorageContainerName=synthetic-inputs", app)
+        self.assertIn("cacheTtlSeconds=300", app)
+        self.assertIn("cacheMaxBytes=134217728", app)
         grant = next(command for command in deployments if "infrastructure/grant-data-access.bicep" in command)
         self.assertEqual(grant[grant.index("--resource-group") + 1], "synthetic-data-rg")
         self.assertIn("storageAccountName=syntheticstorage", grant)
         self.assertIn("containerName=synthetic-inputs", grant)
         self.assertIn("principalId=synthetic-principal-id", grant)
         self.assertIn(["func", "azure", "functionapp", "publish", "synthetic-function-app", "--python"], commands)
+
+
+    def test_cache_overrides_and_zero_settings_are_passed_to_the_template(self):
+        for ttl, budget in (("60", "4096"), ("0", "0")):
+            with self.subTest(ttl=ttl, budget=budget):
+                result, commands = self.run_script(cache_settings={
+                    "OPENPLAN_CACHE_TTL_SECONDS": ttl,
+                    "OPENPLAN_CACHE_MAX_BYTES": budget,
+                })
+                self.assertEqual(result.returncode, 0, result.stderr)
+                app = next(command for command in commands if "infrastructure/main.bicep" in command)
+                self.assertIn(f"cacheTtlSeconds={ttl}", app)
+                self.assertIn(f"cacheMaxBytes={budget}", app)
+
+    def test_invalid_cache_settings_stop_before_external_commands(self):
+        for name in CACHE_ENV:
+            for value in ("-1", "", "1.5", "invalid"):
+                with self.subTest(name=name, value=value):
+                    result, commands = self.run_script(cache_settings={name: value})
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(name, result.stderr)
+                    self.assertEqual(commands, [])
 
 
 if __name__ == "__main__":

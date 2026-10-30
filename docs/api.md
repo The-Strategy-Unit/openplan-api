@@ -13,6 +13,10 @@ the introduction release and excludes the retirement release.
 The TPMA catalogue maps codes to metadata objects containing `active_from`,
 optional `active_to`, and publisher-supplied fields.
 
+Catalogue responses and identifier validation follow the
+[dataset cache lifetime](caching.md#freshness). Release indexes and manifests
+are read without caching.
+
 ## Responses
 
 - **Rates:** require `provider`, `fyear`, or both; both filters apply when supplied.

@@ -45,6 +45,17 @@ storageAccountName="${OPENPLAN_STORAGE_ACCOUNT_NAME:?Set OPENPLAN_STORAGE_ACCOUN
 storageAccountContainer="${OPENPLAN_STORAGE_CONTAINER_NAME:?Set OPENPLAN_STORAGE_CONTAINER_NAME}"
 storageAccountResourceGroup="${OPENPLAN_STORAGE_RESOURCE_GROUP:?Set OPENPLAN_STORAGE_RESOURCE_GROUP}"
 
+cacheTtlSeconds="${OPENPLAN_CACHE_TTL_SECONDS-300}"
+cacheMaxBytes="${OPENPLAN_CACHE_MAX_BYTES-134217728}"
+if [[ ! "$cacheTtlSeconds" =~ ^[0-9]+$ ]]; then
+    echo "Error: OPENPLAN_CACHE_TTL_SECONDS must be a non-negative integer." >&2
+    exit 1
+fi
+if [[ ! "$cacheMaxBytes" =~ ^[0-9]+$ ]]; then
+    echo "Error: OPENPLAN_CACHE_MAX_BYTES must be a non-negative integer." >&2
+    exit 1
+fi
+
 # create the resources ---------------------------------------------------------
 echo "Creating resource group $resourceGroup"
 
@@ -71,7 +82,9 @@ mainOutputs=$(az deployment group create \
   --parameters \
     entraClientId="$entraClientId" \
     dataStorageAccountName="$storageAccountName" \
-    dataStorageContainerName="$storageAccountContainer")
+    dataStorageContainerName="$storageAccountContainer" \
+    cacheTtlSeconds="$cacheTtlSeconds" \
+    cacheMaxBytes="$cacheMaxBytes")
 
 # grant data access to the storage account -------------------------------------
 echo "Granting data access to the storage account $storageAccountName"

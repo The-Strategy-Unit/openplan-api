@@ -22,6 +22,14 @@ param dataStorageAccountName string
 @maxLength(63)
 param dataStorageContainerName string
 
+@description('Dataset cache lifetime in seconds. Zero disables retention.')
+@minValue(0)
+param cacheTtlSeconds int = 300
+
+@description('Maximum cached dataset bytes per Python worker. Zero disables retention.')
+@minValue(0)
+param cacheMaxBytes int = 134217728
+
 @description('Maximum number of Flex Consumption instances.')
 @minValue(1)
 param maximumInstanceCount int = 100
@@ -90,6 +98,9 @@ module functionApp 'modules/function-app.bicep' = {
 
     dataStorageAccountName: dataStorageAccountName
     dataStorageContainerName: dataStorageContainerName
+
+    cacheTtlSeconds: cacheTtlSeconds
+    cacheMaxBytes: cacheMaxBytes
 
     pythonVersion: pythonVersion
     maximumInstanceCount: maximumInstanceCount

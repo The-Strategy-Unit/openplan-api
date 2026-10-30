@@ -7,15 +7,9 @@ from openplan.api.v1 import data
 
 @pytest.fixture(autouse=True)
 def isolate_dataset_caches():
-    readers = (
-        data.read_azure_csv_file, data.read_azure_parquet_file,
-        data.read_azure_json_file,
-    )
-    for reader in readers:
-        reader.cache_clear()
+    data.clear_dataset_cache()
     yield
-    for reader in readers:
-        reader.cache_clear()
+    data.clear_dataset_cache()
 
 
 @pytest.fixture(autouse=True)

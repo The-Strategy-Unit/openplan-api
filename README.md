@@ -3,8 +3,8 @@
 [![Project Status: WIP](https://www.repostatus.org/badges/latest/wip.svg)](https://www.repostatus.org/#wip)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-FastAPI on Azure Functions, secured by Microsoft Entra ID. Provides provider,
-peer, TPMA rate, and demographic datasets for OpenPlan.
+FastAPI on Azure Functions, secured by Microsoft Entra ID. Provides peer, TPMA rate,
+provider and demographic datasets for OpenPlan.
 
 ## Local development
 
@@ -18,13 +18,14 @@ source .venv/bin/activate
 Configure `local.settings.json` using [the example](local.settings.example.json),
 then run `func start`. Set these values in its `Values` section:
 
-| Setting | Value |
-| --- | --- |
-| `OPENPLAN_STORAGE_ACCOUNT_NAME` | Dataset storage account name |
-| `OPENPLAN_STORAGE_CONTAINER_NAME` | Dataset blob container name |
+| Setting                           | Value                        |
+| --------------------------------- | ---------------------------- |
+| `OPENPLAN_STORAGE_ACCOUNT_NAME`   | Dataset storage account name |
+| `OPENPLAN_STORAGE_CONTAINER_NAME` | Dataset blob container name  |
 
 Data reads use `DefaultAzureCredential` and require container read access.
-Restart the host after changing settings to clear cached datasets.
+Datasets cache for five minutes by default; see
+[cache settings and limits](docs/caching.md).
 Health and documentation work without dataset storage configuration.
 
 Swagger UI is at `/docs`; the generated schema is at `/openapi.json`.
@@ -35,17 +36,17 @@ Deployed requests use Entra Easy Auth; local hosting does not enforce it.
 All endpoints use `GET`. The optional `version` query parameter selects the
 dataset release and defaults to `dev`; `/v1/` identifies the API contract.
 
-| Path | Query parameters |
-| --- | --- |
-| `/health` | — |
-| `/v1/reference/versions` | — |
-| `/v1/reference/providers` | `version` |
-| `/v1/reference/peers/{provider}` | `version` |
-| `/v1/tpmas` | `version` |
-| `/v1/tpmas/{tpma}/rates` | `provider`, `fyear`, `version` |
-| `/v1/tpmas/{tpma}/rates/availability` | `version` |
-| `/v1/providers/{provider}/demographic-factors` | `start_year`, `end_year`, `variant`, `version` |
-| `/v1/providers/{provider}/demographic-factors/availability` | `version` |
+| Path                                                        | Query parameters                               |
+| ----------------------------------------------------------- | ---------------------------------------------- |
+| `/health`                                                   | —                                              |
+| `/v1/reference/versions`                                    | —                                              |
+| `/v1/reference/providers`                                   | `version`                                      |
+| `/v1/reference/peers/{provider}`                            | `version`                                      |
+| `/v1/tpmas`                                                 | `version`                                      |
+| `/v1/tpmas/{tpma}/rates`                                    | `provider`, `fyear`, `version`                 |
+| `/v1/tpmas/{tpma}/rates/availability`                       | `version`                                      |
+| `/v1/providers/{provider}/demographic-factors`              | `start_year`, `end_year`, `variant`, `version` |
+| `/v1/providers/{provider}/demographic-factors/availability` | `version`                                      |
 
 Rates require `provider`, `fyear`, or both; financial years look like `202425`.
 Demographics require all three selection parameters, with `end_year >= start_year`.

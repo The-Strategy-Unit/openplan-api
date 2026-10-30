@@ -71,8 +71,9 @@ The two availability endpoints accept the normal `version` query parameter,
 defaulting to `dev`, and return the selected release metadata, resource code,
 valid selections, and publisher-supplied units.
 
-Successful discovery responses use `Cache-Control: no-store`; server reads bypass the
-worker-lifetime JSON cache so newly published releases become visible.
+Discovery metadata bypasses the [dataset cache](caching.md); successful responses
+use `Cache-Control: no-store`. Provider/TPMA validation still follows the catalogue
+cache lifetime.
 
 - Invalid request parameters or inactive catalogue codes: 400.
 - Missing metadata blobs or no manifest entry for the requested resource: 404.
