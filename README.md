@@ -1,48 +1,75 @@
 # OpenPlan API
 
-[![Project Status: WIP – Initial development is in progress, but there has not yet been a stable, usable release suitable for the public.](https://www.repostatus.org/badges/latest/wip.svg)](https://www.repostatus.org/#wip)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Project Status: WIP](https://www.repostatus.org/badges/latest/wip.svg)](https://www.repostatus.org/#wip)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-This repository contains the API for OpenPlan, implemented as Azure Function Apps and secured with Microsoft Entra ID. The code exposes structured data and reference endpoints for planning and analytical workflows, and includes an OpenAPI definition for interactive documentation.
-
-## Overview
-
-OpenPlan API provides a lightweight HTTP layer built on Azure Functions for access to OpenPlan datasets and reference information. The service currently includes:
-
-- provider and reference lookups
-- demographic data endpoints
-- TPMA rate queries by provider and financial year
-- generated OpenAPI and Swagger documentation
-
-The deployment locations and environment details are intentionally not described in this repository.
-
-## Repository structure
-
-- `function_app.py` — Azure Functions app entry point and route registration
-- `openplan/` — application modules and API route handlers
-- `infrastructure/` — infrastructure-as-code for Azure resources
-- `host.json` and `local.settings.json` — Azure Functions runtime configuration
-- `requirements.txt` / `pyproject.toml` — Python project dependencies and packaging metadata
+FastAPI on Azure Functions, secured by Microsoft Entra ID. Provides peer, TPMA rate,
+provider and demographic datasets for OpenPlan.
 
 ## Local development
 
-This project targets Python 3.14.
+Requires Python 3.14, uv, and Azure Functions Core Tools.
 
-1. Create and activate a virtual environment:
-   - `python -m venv .venv`
-   - `source .venv/bin/activate`
-2. Install dependencies:
-   - `pip install -r requirements.txt`
-   - or `uv sync`
-3. Start the Azure Functions host locally:
-   - `func start`
+```bash
+uv sync --locked
+source .venv/bin/activate
+```
 
-Once running, the API exposes OpenAPI and Swagger endpoints through the Azure Functions app.
+Configure `local.settings.json` using [the example](local.settings.example.json),
+then run `func start`. Set these values in its `Values` section:
 
-## Security
+| Setting                           | Value                        |
+| --------------------------------- | ---------------------------- |
+| `OPENPLAN_STORAGE_ACCOUNT_NAME`   | Dataset storage account name |
+| `OPENPLAN_STORAGE_CONTAINER_NAME` | Dataset blob container name  |
 
-This repository contains Azure Function Apps secured with Microsoft Entra ID. Authentication and authorization are enforced at the application boundary; access to deployed resources is managed through Microsoft Entra ID-based identity configuration.
+Data reads use `DefaultAzureCredential` and require container read access.
+Datasets cache for five minutes by default; see
+[cache settings and limits](docs/caching.md).
+Health and documentation work without dataset storage configuration.
 
-## License
+Swagger UI is at `/docs`; the generated schema is at `/openapi.json`.
+Deployed requests use Entra Easy Auth; local hosting does not enforce it.
 
-This project is licensed under the MIT License. See [LICENSE](./LICENSE) for details.
+## API
+
+All endpoints use `GET`. The optional `version` query parameter selects the
+dataset release and defaults to `dev`; `/v1/` identifies the API contract.
+
+| Path                                                        | Query parameters                               |
+| ----------------------------------------------------------- | ---------------------------------------------- |
+| `/health`                                                   | —                                              |
+| `/v1/reference/versions`                                    | —                                              |
+| `/v1/reference/providers`                                   | `version`                                      |
+| `/v1/reference/peers/{provider}`                            | `version`                                      |
+| `/v1/tpmas`                                                 | `version`                                      |
+| `/v1/tpmas/{tpma}/rates`                                    | `provider`, `fyear`, `version`                 |
+| `/v1/tpmas/{tpma}/rates/availability`                       | `version`                                      |
+| `/v1/providers/{provider}/demographic-factors`              | `start_year`, `end_year`, `variant`, `version` |
+| `/v1/providers/{provider}/demographic-factors/availability` | `version`                                      |
+
+Rates require `provider`, `fyear`, or both; financial years look like `202425`.
+Demographics require all three selection parameters, with `end_year >= start_year`.
+Discover valid codes through the catalogues using the same dataset version.
+
+See [API contracts and route changes](docs/api.md) for response and error details.
+Discovery requires publisher-supplied [dataset manifests](docs/dataset-manifests.md).
+
+## Tests
+
+```bash
+uv run pytest -vv
+```
+
+Tests use synthetic data and block live storage access. [CI](.github/workflows/tests.yml)
+runs tests and Python/shell syntax checks with Python 3.14 and locked dependencies.
+
+## Deployment
+
+[Infrastructure](infrastructure/) defines hosting, managed identity, and Entra
+authentication. `infrastructure/create.sh` uses both storage variables above,
+exported in the shell, plus `OPENPLAN_STORAGE_RESOURCE_GROUP` for the dataset
+account's resource group. It configures access and publishes the app. Existing
+deployments must also supply both storage application settings.
+
+MIT licensed; see [LICENSE](LICENSE).

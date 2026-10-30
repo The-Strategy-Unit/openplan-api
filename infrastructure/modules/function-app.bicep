@@ -21,6 +21,20 @@ param hostStorageName string
 @description('Name of the private deployment container in host storage.')
 param deploymentContainerName string
 
+@description('Name of the existing storage account containing OpenPlan datasets.')
+param dataStorageAccountName string
+
+@description('Name of the existing blob container containing OpenPlan datasets.')
+param dataStorageContainerName string
+
+@description('Dataset cache lifetime in seconds. Zero disables retention.')
+@minValue(0)
+param cacheTtlSeconds int = 300
+
+@description('Maximum cached dataset bytes per Python worker. Zero disables retention.')
+@minValue(0)
+param cacheMaxBytes int = 134217728
+
 @description('Application Insights connection string.')
 @secure()
 param appInsightsConnectionString string
@@ -88,6 +102,22 @@ resource functionApp 'Microsoft.Web/sites@2025-03-01' = {
         {
           name: 'AZURE_CLIENT_ID'
           value: identityClientId
+        }
+        {
+          name: 'OPENPLAN_STORAGE_ACCOUNT_NAME'
+          value: dataStorageAccountName
+        }
+        {
+          name: 'OPENPLAN_STORAGE_CONTAINER_NAME'
+          value: dataStorageContainerName
+        }
+        {
+          name: 'OPENPLAN_CACHE_TTL_SECONDS'
+          value: string(cacheTtlSeconds)
+        }
+        {
+          name: 'OPENPLAN_CACHE_MAX_BYTES'
+          value: string(cacheMaxBytes)
         }
       ]
     }

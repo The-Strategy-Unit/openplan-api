@@ -1,98 +1,57 @@
-import json
-import logging
 from typing import Annotated, Any
 
-import azure.functions as func
-from azure_functions_openapi import openapi
+from fastapi import APIRouter, Query
 from packaging.version import Version
-from pydantic import AfterValidator, BaseModel, Field, TypeAdapter
+from pydantic import BaseModel, Field
 
 from openplan.api.v1.data import read_azure_json_file
-from openplan.api.v1.error_handling import handle_route_errors
+from openplan.api.v1.error_handling import DATA_ERROR_RESPONSES, InvalidRequestParameters
 from openplan.api.v1.models import VersionQuery
-from openplan.api.v1.settings import CURRENT_APP_VERSION
 
-bp = func.Blueprint()
-logger = logging.getLogger(__name__)
+router = APIRouter(tags=["TPMAs"], responses=DATA_ERROR_RESPONSES)
+
+TPMAIdentifier = Annotated[str, Field(pattern=r"^(IP|OP|AE)-(AA|EF)-\d{3}$", description="TPMA code.")]
+
+
+class TPMAResponseModel(BaseModel):
+    model_config = {"extra": "allow"}
+    active_from: str
+    active_to: str | None = None
 
 
 def _get_TPMAs():
     return read_azure_json_file("api/tpmas.json")
 
 
-def validate_tpma(value: str) -> str:
-    if not is_valid_tpma(value):
-        raise ValueError("Not recognised as a valid TPMA code")
-    return value
-
-
-TPMACode = Annotated[
-    str,
-    Field(
-        pattern=r"^(IP|OP|AE)-(AA|EF)-\d{3}$",
-        description="TPMA code.",
-    ),
-    AfterValidator(validate_tpma),
-]
-
-
-class TPMAPath(BaseModel):
-    tpma: TPMACode
-
-
-class TPMAResponseModel(BaseModel):
-    model_config = {"extra": "allow"}
-
-
-TPMAResponseSchema = TypeAdapter(dict[str, str]).json_schema()
-
-
-def get_tpmas(version: Version | str | None = None) -> Any:
+def get_tpmas(version: Version | str | None = None) -> dict[str, Any]:
     if version is None or version == "dev":
-
-        def compare_version(v):
-            v2 = v.get("active_to")
-            return v2 is None
+        def compare_version(record):
+            return record.get("active_to") is None
     else:
         if isinstance(version, str):
             version = Version(version)
 
-        def compare_version(v):
-            v1 = v["active_from"]
-            v2 = v.get("active_to")
-            return Version(v1) <= version and (v2 is None or version < Version(v2))
-
-    return {k: v for k, v in _get_TPMAs().items() if compare_version(v)}
+        def compare_version(record):
+            start = record["active_from"]
+            end = record.get("active_to")
+            return Version(start) <= version and (end is None or version < Version(end))
+    return {code: record for code, record in _get_TPMAs().items() if compare_version(record)}
 
 
 def is_valid_tpma(tpma: str, version: Version | str | None = None) -> bool:
     return tpma in get_tpmas(version)
 
 
-@bp.route("v1/tpmas", methods=["GET"])
-@openapi(
-    summary="List available TPMAs",
-    description="Returns the TPMAs available for the requested API version.",
-    tags=["TPMAs"],
-    querystring=VersionQuery,
-    responses={
-        200: {
-            "description": "Successful response",
-            "content": {
-                "application/json": {
-                    "schema": TPMAResponseSchema,
-                }
-            },
-        },
-        400: {"description": "Invalid request parameters"},
-    },
-)
-@handle_route_errors
-def route_tpmas(req: func.HttpRequest) -> func.HttpResponse:
-    query_params = VersionQuery.model_validate(
-        {"version": req.params.get("version", CURRENT_APP_VERSION)}
-    )
-    version = query_params.version
+def validate_tpma(tpma: str, version: str) -> str:
+    if not is_valid_tpma(tpma, version):
+        raise InvalidRequestParameters("tpma", "Not recognised as a valid TPMA code")
+    return tpma
 
-    tpmas = get_tpmas(version)
-    return func.HttpResponse(json.dumps(tpmas), mimetype="application/json")
+
+@router.get(
+    "/v1/tpmas", response_model=dict[str, TPMAResponseModel], response_model_exclude_unset=True,
+    summary="List available TPMAs",
+    description="Returns the TPMAs available for the requested dataset version.",
+)
+def route_tpmas(query: Annotated[VersionQuery, Query()]) -> dict[str, Any]:
+    return get_tpmas(query.version)

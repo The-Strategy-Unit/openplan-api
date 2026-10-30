@@ -5,7 +5,7 @@ description = "OpenPlan API Azure Functions application"
 requires-python = "==3.14.*"
 dependencies = [
   "azure-functions",
-  "azure-functions-openapi",
+  "fastapi",
   "azure-identity",
   "azure-storage-blob",
   "packaging>=26.3",
@@ -13,3 +13,14 @@ dependencies = [
   "pydantic>=2.7,<3",
   "pip",
 ]
+
+[dependency-groups]
+dev = [
+  "httpx2",
+  "pytest",
+  "polars[rtcompat]",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

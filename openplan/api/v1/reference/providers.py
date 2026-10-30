@@ -1,100 +1,58 @@
-import json
-import logging
-from typing import Annotated, Any
+from typing import Annotated
 
-import azure.functions as func
-from azure_functions_openapi import openapi
+from fastapi import APIRouter, Query
 from packaging.version import Version
-from pydantic import AfterValidator, BaseModel, Field, TypeAdapter
+from pydantic import Field
 
 from openplan.api.v1.data import read_azure_json_file
-from openplan.api.v1.error_handling import handle_route_errors
+from openplan.api.v1.error_handling import DATA_ERROR_RESPONSES, InvalidRequestParameters
 from openplan.api.v1.models import VersionQuery
-from openplan.api.v1.settings import CURRENT_APP_VERSION
 
-bp = func.Blueprint()
-logger = logging.getLogger(__name__)
+router = APIRouter(tags=["Reference"], responses=DATA_ERROR_RESPONSES)
+
+ProviderIdentifier = Annotated[
+    str,
+    Field(
+        min_length=3, max_length=5,
+        pattern=r"^(?:[A-Z0-9]{3}|(?:[A-Z][0-9]){2}[A-Z])$",
+        description="Provider ODS code.",
+    ),
+]
 
 
 def _get_providers():
     return read_azure_json_file("api/providers.json")
 
 
-def validate_provider(value: str) -> str:
-    if not is_valid_provider(value):
-        raise ValueError("Not recognised as a valid provider code")
-    return value
-
-
-ProviderCode = Annotated[
-    str,
-    Field(
-        min_length=3,
-        max_length=5,
-        pattern=r"^[A-Z0-9]{3}|([A-Z][0-9]){2}[A-Z]$",
-        description="Provider ODS code.",
-    ),
-    AfterValidator(validate_provider),
-]
-
-
-class ProviderPath(BaseModel):
-    provider: ProviderCode
-
-
-class ProvidersResponseModel(BaseModel):
-    model_config = {"extra": "allow"}
-
-
-ProvidersResponseSchema = TypeAdapter(dict[str, str]).json_schema()
-
-
-def get_providers(version: Version | str | None = None) -> Any:
+def get_providers(version: Version | str | None = None) -> dict[str, str]:
     if version is None or version == "dev":
-
-        def compare_version(v):
-            v2 = v.get("valid_to")
-            return v2 is None
+        def compare_version(record):
+            return record.get("valid_to") is None
     else:
         if isinstance(version, str):
             version = Version(version)
 
-        def compare_version(v):
-            v1 = v["valid_from"]
-            v2 = v.get("valid_to")
-            return Version(v1) <= version and (v2 is None or version < Version(v2))
-
-    return {k: v["name"] for k, v in _get_providers().items() if compare_version(v)}
+        def compare_version(record):
+            start = record["valid_from"]
+            end = record.get("valid_to")
+            return Version(start) <= version and (end is None or version < Version(end))
+    return {code: record["name"] for code, record in _get_providers().items() if compare_version(record)}
 
 
 def is_valid_provider(provider: str, version: Version | str | None = None) -> bool:
     return provider in get_providers(version)
 
 
-@bp.route("v1/reference/providers", methods=["GET"])
-@openapi(
-    summary="List available providers",
-    description="Returns the providers available for the requested API version.",
-    tags=["Reference"],
-    querystring=VersionQuery,
-    responses={
-        200: {
-            "description": "Successful response",
-            "content": {
-                "application/json": {
-                    "schema": ProvidersResponseSchema,
-                }
-            },
-        },
-        400: {"description": "Invalid request parameters"},
-    },
-)
-@handle_route_errors
-def route_providers(req: func.HttpRequest) -> func.HttpResponse:
-    query_params = VersionQuery.model_validate(
-        {"version": req.params.get("version", CURRENT_APP_VERSION)}
-    )
-    version = query_params.version
+def validate_provider(provider: str, version: str) -> str:
+    if not is_valid_provider(provider, version):
+        raise InvalidRequestParameters("provider", "Not recognised as a valid provider code")
+    return provider
 
-    providers = get_providers(version)
-    return func.HttpResponse(json.dumps(providers), mimetype="application/json")
+
+@router.get(
+    "/v1/reference/providers", response_model=dict[str, str],
+    summary="List available providers",
+    description="Returns the providers available for the requested dataset version.",
+)
+def route_providers(query: Annotated[VersionQuery, Query()]) -> dict[str, str]:
+    return get_providers(query.version)

@@ -8,10 +8,6 @@ ENVIRONMENTS=("dev" "prod")
 # variables that might need to be reconfigured if anything changes in the future
 location="uksouth"
 
-storageAccountResourceGroup="nhp"
-storageAccountName="nhpsa"
-storageAccountContainer="inputs-data"
-
 # validate environment argument ------------------------------------------------
 
 # Check the number of arguments
@@ -44,6 +40,22 @@ fi
 resourceGroup="openplan-api-$ENVIRONMENT"
 applicationName="su-nhp-${ENVIRONMENT}"
 
+# Dataset storage must be explicit and is separate from Functions host storage.
+storageAccountName="${OPENPLAN_STORAGE_ACCOUNT_NAME:?Set OPENPLAN_STORAGE_ACCOUNT_NAME}"
+storageAccountContainer="${OPENPLAN_STORAGE_CONTAINER_NAME:?Set OPENPLAN_STORAGE_CONTAINER_NAME}"
+storageAccountResourceGroup="${OPENPLAN_STORAGE_RESOURCE_GROUP:?Set OPENPLAN_STORAGE_RESOURCE_GROUP}"
+
+cacheTtlSeconds="${OPENPLAN_CACHE_TTL_SECONDS-300}"
+cacheMaxBytes="${OPENPLAN_CACHE_MAX_BYTES-134217728}"
+if [[ ! "$cacheTtlSeconds" =~ ^[0-9]+$ ]]; then
+    echo "Error: OPENPLAN_CACHE_TTL_SECONDS must be a non-negative integer." >&2
+    exit 1
+fi
+if [[ ! "$cacheMaxBytes" =~ ^[0-9]+$ ]]; then
+    echo "Error: OPENPLAN_CACHE_MAX_BYTES must be a non-negative integer." >&2
+    exit 1
+fi
+
 # create the resources ---------------------------------------------------------
 echo "Creating resource group $resourceGroup"
 
@@ -68,7 +80,11 @@ mainOutputs=$(az deployment group create \
   --template-file "infrastructure/main.bicep" \
   --output json \
   --parameters \
-    entraClientId="$entraClientId")
+    entraClientId="$entraClientId" \
+    dataStorageAccountName="$storageAccountName" \
+    dataStorageContainerName="$storageAccountContainer" \
+    cacheTtlSeconds="$cacheTtlSeconds" \
+    cacheMaxBytes="$cacheMaxBytes")
 
 # grant data access to the storage account -------------------------------------
 echo "Granting data access to the storage account $storageAccountName"
@@ -87,5 +103,5 @@ az deployment group create \
 functionAppName=$(jq -r '.properties.outputs.functionAppName.value' <<< "$mainOutputs")
 echo "Deploying the function app '$functionAppName' (waiting 5s for resources to be ready)"
 
-sleep 5 
+sleep 5
 func azure functionapp publish "$functionAppName" --python

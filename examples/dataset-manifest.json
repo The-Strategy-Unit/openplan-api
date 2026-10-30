@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "version": "v1.0",
+  "published_at": "2026-01-01T00:00:00Z",
+  "source": "Synthetic example data",
+  "rates": {
+    "IP-AA-001": {
+      "selections": [
+        {"fyear": "202425", "providers": ["R01"]},
+        {"fyear": "202526", "providers": ["R02"]}
+      ],
+      "units": {}
+    }
+  },
+  "demographics": {
+    "R01": {
+      "selections": [
+        {"start_year": 2024, "variant": "principal", "end_years": [2024, 2030]},
+        {"start_year": 2025, "variant": "low", "end_years": [2025, 2035]}
+      ],
+      "units": {}
+    }
+  }
+}

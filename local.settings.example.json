@@ -1,0 +1,10 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "OPENPLAN_STORAGE_ACCOUNT_NAME": "yourstorageaccount",
+    "OPENPLAN_STORAGE_CONTAINER_NAME": "your-container",
+    "OPENPLAN_CACHE_TTL_SECONDS": "300",
+    "OPENPLAN_CACHE_MAX_BYTES": "134217728"
+  }
+}

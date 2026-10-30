@@ -1,131 +1,59 @@
-import json
 import logging
-from typing import Any
+from typing import Annotated, Any
 
-import azure.functions as func
+from fastapi import APIRouter, Path, Query
 import polars as pl
-from azure_functions_openapi import openapi
 
 from openplan.api.v1.data import read_azure_parquet_file
-from openplan.api.v1.error_handling import handle_route_errors
-from openplan.api.v1.models import FinancialYearPath, VersionQuery
-from openplan.api.v1.reference.providers import ProviderPath
-from openplan.api.v1.settings import CURRENT_APP_VERSION
-from openplan.api.v1.tpmas import TPMAPath
-from openplan.api.v1.tpmas.models import RatesByFyear, RatesByProvider
+from openplan.api.v1.error_handling import DATA_ERROR_RESPONSES
+from openplan.api.v1.reference.providers import validate_provider
+from openplan.api.v1.tpmas import TPMAIdentifier, validate_tpma
+from openplan.api.v1.tpmas.models import Rate, RatesQuery
 
-bp = func.Blueprint()
+router = APIRouter(tags=["TPMA Rates"], responses=DATA_ERROR_RESPONSES)
 logger = logging.getLogger(__name__)
 
 
-def get_tpma_rates_for_provider(
+def get_tpma_rates(
     version: str,
-    provider: str,
     tpma: str,
+    provider: str | None = None,
+    fyear: int | None = None,
 ) -> list[dict[str, Any]]:
     filename = f"api/{version}/provider/rates/{tpma}.parquet"
+    frame = read_azure_parquet_file(filename)
+    if provider is not None:
+        frame = frame.filter(pl.col("provider") == provider)
+    if fyear is not None:
+        frame = frame.filter(pl.col("fyear") == fyear)
     return (
-        read_azure_parquet_file(filename)
-        .filter(pl.col("provider") == provider)
-        .select(pl.col("fyear"), pl.col("denominator"), pl.col("std_rate"))
+        frame.select("provider", "fyear", "denominator", "std_rate")
         .collect()
         .to_dicts()
     )
 
 
-def get_tpma_rates_for_fyear(
-    version: str,
-    fyear: int,
-    tpma: str,
+@router.get(
+    "/v1/tpmas/{tpma}/rates", response_model=list[Rate],
+    summary="Get TPMA rates",
+    description=(
+        "Returns rates for the specified TPMA, filtered by provider, financial year, "
+        "or both. At least one of provider or fyear must be supplied. Each row "
+        "contains provider, fyear, denominator, and std_rate."
+    ),
+)
+def route_tpma_rates(
+    tpma: Annotated[TPMAIdentifier, Path()],
+    query: Annotated[RatesQuery, Query()],
 ) -> list[dict[str, Any]]:
-    filename = f"api/{version}/provider/rates/{tpma}.parquet"
-    return (
-        read_azure_parquet_file(filename)
-        .filter(pl.col("fyear") == fyear)
-        .select(pl.col("provider"), pl.col("denominator"), pl.col("std_rate"))
-        .collect()
-        .to_dicts()
-    )
-
-
-@bp.route(route="v1/tpmas/rates/provider/provider={provider}/{tpma}", methods=["GET"])
-@openapi(
-    summary="Get TPMA rates for a provider",
-    description="Returns rates for the specified provider and TPMA.",
-    tags=["TPMA Rates"],
-    path=ProviderPath,
-    querystring=VersionQuery,
-    responses={
-        200: {
-            "description": "Successful response",
-            "content": {
-                "application/json": {
-                    "schema": RatesByProvider,
-                }
-            },
-        },
-        400: {"description": "Invalid request parameters"},
-    },
-)
-@handle_route_errors
-def route_tpma_rates_for_provider(req: func.HttpRequest) -> func.HttpResponse:
-    path_params = ProviderPath.model_validate(
-        {"provider": req.route_params.get("provider")}
-    )
-    version = VersionQuery.model_validate(
-        {"version": req.params.get("version", CURRENT_APP_VERSION)}
-    ).version
-    tpma = TPMAPath.model_validate({"tpma": req.route_params.get("tpma")}).tpma
-    provider = path_params.provider
-
+    if query.provider is not None:
+        validate_provider(query.provider, query.version)
+    validate_tpma(tpma, query.version)
     logger.info(
-        "Request for rates by provider: version=%s, provider=%s, tpma=%s",
-        version,
-        provider,
-        tpma,
+        "Request for rates: version=%s, tpma=%s, provider=%s, fyear=%s",
+        query.version, tpma, query.provider, query.fyear,
     )
-
-    rates = get_tpma_rates_for_provider(version, provider, tpma)
-    return func.HttpResponse(json.dumps(rates), mimetype="application/json")
-
-
-@bp.route(route="v1/tpmas/rates/provider/fyear={fyear}/{tpma}", methods=["GET"])
-@openapi(
-    summary="Get TPMA rates for a financial year",
-    description="Returns rates for the specified financial year and TPMA.",
-    tags=["TPMA Rates"],
-    path=FinancialYearPath,
-    querystring=VersionQuery,
-    responses={
-        200: {
-            "description": "Successful response",
-            "content": {
-                "application/json": {
-                    "schema": RatesByFyear,
-                }
-            },
-        },
-        400: {"description": "Invalid request parameters"},
-    },
-)
-@handle_route_errors
-def route_tpma_rates_for_fyear(req: func.HttpRequest) -> func.HttpResponse:
-    version = VersionQuery.model_validate(
-        {"version": req.params.get("version", CURRENT_APP_VERSION)}
-    ).version
-    fyear = FinancialYearPath.model_validate(
-        {"fyear": req.route_params.get("fyear")}
-    ).fyear
-    tpma = TPMAPath.model_validate({"tpma": req.route_params.get("tpma")}).tpma
-
-    fyear_int = int(fyear)
-
-    logger.info(
-        "Request for rates by fyear: version=%s, fyear=%s, tpma=%s",
-        version,
-        fyear_int,
-        tpma,
+    return get_tpma_rates(
+        query.version, tpma, provider=query.provider,
+        fyear=int(query.fyear) if query.fyear is not None else None,
     )
-
-    rates = get_tpma_rates_for_fyear(version, fyear_int, tpma)
-    return func.HttpResponse(json.dumps(rates), mimetype="application/json")
