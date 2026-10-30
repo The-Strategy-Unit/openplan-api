@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "versions": [
+    {
+      "version": "v1.0",
+      "published_at": "2026-01-01T00:00:00Z",
+      "source": "Synthetic example data"
+    }
+  ]
+}

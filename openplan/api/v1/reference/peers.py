@@ -7,7 +7,7 @@ from azure_functions_openapi import openapi
 from packaging.version import Version
 
 from openplan.api.v1.data import read_azure_json_file
-from openplan.api.v1.error_handling import handle_route_errors
+from openplan.api.v1.error_handling import error_response, handle_route_errors
 from openplan.api.v1.models import VersionQuery
 from openplan.api.v1.reference.providers import ProviderPath
 from openplan.api.v1.settings import CURRENT_APP_VERSION
@@ -29,7 +29,7 @@ def _get_peers(provider: str, version: Version | str | None = None) -> Any:
     return max(
         (
             (Version(k2), v2)
-            for k2, v2 in peers[provider].items()
+            for k2, v2 in peers.get(provider, {}).items()
             if compare_version(k2)
         ),
         default=(None, None),
@@ -50,17 +50,20 @@ def _get_peers(provider: str, version: Version | str | None = None) -> Any:
             "content": {"application/json": {"schema": {"type": "object"}}},
         },
         400: {"description": "Invalid request parameters"},
+        404: {"description": "No peer set available for this provider and dataset version"},
     },
 )
 @handle_route_errors
 def route_peers(req: func.HttpRequest) -> func.HttpResponse:
-    path_params = ProviderPath.model_validate(
-        {"provider": req.route_params.get("provider")}
-    )
-    provider = path_params.provider
     version = VersionQuery.model_validate(
         {"version": req.params.get("version", CURRENT_APP_VERSION)}
     ).version
+    provider = ProviderPath.model_validate(
+        {"provider": req.route_params.get("provider")},
+        context={"version": version},
+    ).provider
 
     peers = _get_peers(provider, version)
+    if peers is None:
+        return error_response("No peer set available for this provider and dataset version", 404)
     return func.HttpResponse(json.dumps(peers), mimetype="application/json")
