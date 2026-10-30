@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Annotated, Any
+from typing import Annotated
 
 import azure.functions as func
 from azure_functions_openapi import openapi
@@ -15,11 +15,11 @@ bp = func.Blueprint()
 logger = logging.getLogger(__name__)
 
 
-def _get_providers():
+def _get_providers() -> dict[str, dict[str, str]]:
     return read_azure_json_file("api/providers.json")
 
 
-def get_providers(version: Version | str | None = None) -> Any:
+def get_providers(version: Version | str | None = None) -> dict[str, str]:
     if version is None or version == "dev":
 
         def compare_version(v):

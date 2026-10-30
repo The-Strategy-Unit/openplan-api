@@ -1,6 +1,5 @@
 import json
 import logging
-from typing import Any
 
 import azure.functions as func
 from azure_functions_openapi import openapi
@@ -15,8 +14,8 @@ bp = func.Blueprint()
 logger = logging.getLogger(__name__)
 
 
-def _get_peers(provider: str, version: Version | str | None = None) -> Any:
-    peers = read_azure_json_file("api/peers.json")
+def _get_peers(provider: str, version: Version | str | None = None) -> list[str]:
+    peers: dict[str, dict[str, list[str]]] = read_azure_json_file("api/peers.json")
 
     if version is None or version == "dev":
         compare_version = lambda _: True
@@ -25,7 +24,7 @@ def _get_peers(provider: str, version: Version | str | None = None) -> Any:
             version = Version(version)
         compare_version = lambda v: Version(v) <= version
 
-    return max(
+    peers = max(
         (
             (Version(k2), v2)
             for k2, v2 in peers[provider].items()
@@ -33,7 +32,8 @@ def _get_peers(provider: str, version: Version | str | None = None) -> Any:
         ),
         default=(None, None),
         key=lambda x: x[0],
-    )[1]
+    )
+    return peers[1] or []
 
 
 @bp.route("v1/reference/peers/{provider}", methods=["GET"])
