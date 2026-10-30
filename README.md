@@ -27,15 +27,11 @@ The deployment locations and environment details are intentionally not described
 
 ## Local development
 
-This project targets Python 3.14.
+This project targets Python 3.14 and uv locally.
 
-1. Create and activate a virtual environment:
-   - `python -m venv .venv`
-   - `source .venv/bin/activate`
-2. Install dependencies:
-   - `pip install -r requirements.txt`
-   - or `uv sync`
-3. Start the Azure Functions host locally:
+1. Create the virtual environment and install dependencies:
+   - `uv sync`
+2. Start the Azure Functions host locally:
    - `func start`
 
 Once running, the API exposes OpenAPI and Swagger endpoints through the Azure Functions app.
