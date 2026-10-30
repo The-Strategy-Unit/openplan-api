@@ -39,6 +39,71 @@ This project targets Python 3.14.
 
 Once running, the API exposes OpenAPI and Swagger endpoints through the Azure Functions app.
 
+## API endpoints
+
+All data endpoints use `GET`. The `/v1/` prefix identifies the HTTP API contract;
+the optional `version` query parameter selects a dataset release such as `v1.0`
+and defaults to `dev`.
+
+| Purpose             | Path                                           | Selection parameters                           |
+| ------------------- | ---------------------------------------------- | ---------------------------------------------- |
+| Provider catalogue  | `/v1/reference/providers`                      | `version`                                      |
+| TPMA catalogue      | `/v1/tpmas`                                    | `version`                                      |
+| Provider peers      | `/v1/reference/peers/{provider}`               | `version`                                      |
+| TPMA rates          | `/v1/tpmas/{tpma}/rates`                       | `provider`, `fyear`, `version`                 |
+| Demographic factors | `/v1/providers/{provider}/demographic-factors` | `start_year`, `end_year`, `variant`, `version` |
+
+Provider and TPMA identifiers are validated against the selected dataset version.
+Use the catalogues with the same `version` to discover valid codes, including
+historical identifiers. Validity includes the introduction release and excludes
+the retirement release. The TPMA catalogue maps codes to metadata objects with
+`active_from`, optional `active_to`, and any additional catalogue metadata.
+
+Rates require `provider`, `fyear`, or both. When both are supplied, both filters
+apply. Each response row contains `provider`, `fyear`, `denominator`, and
+`std_rate`, regardless of the filters. A valid query with no matching rows
+returns an empty list. Financial years use six digits spanning consecutive
+years, for example `202425`. Century rollovers such as `199900` are valid;
+values such as `202499` are rejected.
+
+Demographic factors require `start_year`, `end_year`, and `variant` as query
+parameters. `end_year` must be greater than or equal to `start_year`. The start
+year selects the baseline financial-year dataset; the response contains
+population and birth factors for the baseline and horizon years, grouped by sex
+and age. Variant identifiers must not contain path separators.
+
+Invalid parameters or codes outside the selected dataset version return 400.
+Peer queries return 404 when no peer set exists for that provider and version;
+an explicitly empty peer set remains a successful 200 response.
+
+Example requests (replace provider and TPMA codes with values from the catalogues):
+
+```text
+/v1/tpmas/IP-AA-001/rates?provider=RXX
+/v1/tpmas/IP-AA-001/rates?fyear=202425
+/v1/tpmas/IP-AA-001/rates?provider=RXX&fyear=202425&version=v1.0
+/v1/providers/RXX/demographic-factors?start_year=2024&end_year=2030&variant=principal
+```
+
+The earlier `/v1/tpmas/rates/provider/provider={provider}/{tpma}` and
+`/v1/tpmas/rates/provider/fyear={fyear}/{tpma}` routes are replaced by the single
+rate endpoint above. Rate responses now always include both provider and
+financial year. The earlier
+`/v1/demographics/provider/{provider}/{start_year}/{end_year}/{variant}` route is
+replaced by the demographic-factors endpoint above. These are breaking changes;
+the earlier routes have no compatibility aliases.
+
+## Tests
+
+Run the endpoint regression tests from the repository root:
+
+```bash
+uv run --locked python -m unittest discover -s tests -v
+```
+
+The tests use Python's standard-library `unittest`, synthetic datasets, and real
+Polars transformations. They do not require Azure credentials or live storage.
+
 ## Security
 
 This repository contains Azure Function Apps secured with Microsoft Entra ID. Authentication and authorization are enforced at the application boundary; access to deployed resources is managed through Microsoft Entra ID-based identity configuration.

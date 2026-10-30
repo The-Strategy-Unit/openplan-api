@@ -5,11 +5,11 @@ from typing import Annotated, Any
 import azure.functions as func
 from azure_functions_openapi import openapi
 from packaging.version import Version
-from pydantic import AfterValidator, BaseModel, Field, TypeAdapter
+from pydantic import AfterValidator, BaseModel, Field, TypeAdapter, ValidationInfo
 
 from openplan.api.v1.data import read_azure_json_file
 from openplan.api.v1.error_handling import handle_route_errors
-from openplan.api.v1.models import VersionQuery
+from openplan.api.v1.models import VersionQuery, validation_version
 from openplan.api.v1.settings import CURRENT_APP_VERSION
 
 bp = func.Blueprint()
@@ -20,8 +20,8 @@ def _get_TPMAs():
     return read_azure_json_file("api/tpmas.json")
 
 
-def validate_tpma(value: str) -> str:
-    if not is_valid_tpma(value):
+def validate_tpma(value: str, info: ValidationInfo) -> str:
+    if not is_valid_tpma(value, validation_version(info)):
         raise ValueError("Not recognised as a valid TPMA code")
     return value
 
@@ -42,9 +42,11 @@ class TPMAPath(BaseModel):
 
 class TPMAResponseModel(BaseModel):
     model_config = {"extra": "allow"}
+    active_from: str
+    active_to: str | None = None
 
 
-TPMAResponseSchema = TypeAdapter(dict[str, str]).json_schema()
+TPMAResponseSchema = TypeAdapter(dict[str, TPMAResponseModel]).json_schema()
 
 
 def get_tpmas(version: Version | str | None = None) -> Any:
@@ -72,7 +74,7 @@ def is_valid_tpma(tpma: str, version: Version | str | None = None) -> bool:
 @bp.route("v1/tpmas", methods=["GET"])
 @openapi(
     summary="List available TPMAs",
-    description="Returns the TPMAs available for the requested API version.",
+    description="Returns the TPMAs available for the requested dataset version.",
     tags=["TPMAs"],
     querystring=VersionQuery,
     responses={

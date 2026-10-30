@@ -13,3 +13,13 @@ dependencies = [
   "pydantic>=2.7,<3",
   "pip",
 ]
+
+[dependency-groups]
+dev = [
+  "pytest",
+  "polars[rtcompat]",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

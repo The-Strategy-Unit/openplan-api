@@ -17,7 +17,10 @@ from pydantic import ValidationError
 
 
 def is_valid_fyear(fyear: str) -> bool:
-    return bool(re.match(r"^\d{6}$", fyear))
+    if re.fullmatch(r"[0-9]{6}", fyear) is None:
+        return False
+    start_year = int(fyear[:4])
+    return start_year > 0 and int(fyear[4:]) == (start_year + 1) % 100
 
 
 def is_valid_version(version: str) -> bool:
