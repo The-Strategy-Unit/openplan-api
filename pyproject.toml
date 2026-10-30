@@ -18,7 +18,7 @@ dependencies = [
 dev = [
   "httpx2",
   "pytest",
-  "polars[rtcompat]",
+  "polars",
 ]
 
 [tool.pytest.ini_options]

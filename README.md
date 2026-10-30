@@ -51,10 +51,10 @@ the Entra authentication boundary and the established 400 validation status.
 
 Dataset storage is configured through environment variables:
 
-| Variable | Meaning |
-| --- | --- |
-| `OPENPLAN_STORAGE_ACCOUNT_NAME` | Existing Azure storage account name, without a URL or path |
-| `OPENPLAN_STORAGE_CONTAINER_NAME` | Existing blob container containing OpenPlan datasets |
+| Variable                          | Meaning                                                    |
+| --------------------------------- | ---------------------------------------------------------- |
+| `OPENPLAN_STORAGE_ACCOUNT_NAME`   | Existing Azure storage account name, without a URL or path |
+| `OPENPLAN_STORAGE_CONTAINER_NAME` | Existing blob container containing OpenPlan datasets       |
 
 Both are required for data reads; there is no default storage account or
 container. The account name determines the public Azure Blob endpoint
@@ -83,17 +83,17 @@ All data endpoints use `GET`. The `/v1/` prefix identifies the HTTP API contract
 the optional `version` query parameter selects a dataset release such as `v1.0`
 and defaults to `dev`.
 
-| Purpose             | Path                                           | Selection parameters                           |
-| ------------------- | ---------------------------------------------- | ---------------------------------------------- |
-| Application liveness | `/health` | None |
-| Dataset releases | `/v1/reference/versions` | None |
-| Rate availability | `/v1/tpmas/{tpma}/rates/availability` | `version` |
-| Demographic availability | `/v1/providers/{provider}/demographic-factors/availability` | `version` |
-| Provider catalogue  | `/v1/reference/providers`                      | `version`                                      |
-| TPMA catalogue      | `/v1/tpmas`                                    | `version`                                      |
-| Provider peers      | `/v1/reference/peers/{provider}`               | `version`                                      |
-| TPMA rates          | `/v1/tpmas/{tpma}/rates`                       | `provider`, `fyear`, `version`                 |
-| Demographic factors | `/v1/providers/{provider}/demographic-factors` | `start_year`, `end_year`, `variant`, `version` |
+| Purpose                  | Path                                                        | Selection parameters                           |
+| ------------------------ | ----------------------------------------------------------- | ---------------------------------------------- |
+| Application liveness     | `/health`                                                   | None                                           |
+| Dataset releases         | `/v1/reference/versions`                                    | None                                           |
+| Rate availability        | `/v1/tpmas/{tpma}/rates/availability`                       | `version`                                      |
+| Demographic availability | `/v1/providers/{provider}/demographic-factors/availability` | `version`                                      |
+| Provider catalogue       | `/v1/reference/providers`                                   | `version`                                      |
+| TPMA catalogue           | `/v1/tpmas`                                                 | `version`                                      |
+| Provider peers           | `/v1/reference/peers/{provider}`                            | `version`                                      |
+| TPMA rates               | `/v1/tpmas/{tpma}/rates`                                    | `provider`, `fyear`, `version`                 |
+| Demographic factors      | `/v1/providers/{provider}/demographic-factors`              | `start_year`, `end_year`, `variant`, `version` |
 
 Provider and TPMA identifiers are validated against the selected dataset version.
 Use the catalogues with the same `version` to discover valid codes, including
@@ -158,11 +158,9 @@ uv run pytest -vv
 Pytest runs the `unittest`-based regression tests with synthetic datasets and real
 Polars transformations. HTTP tests use FastAPI's TestClient; adapter tests also
 invoke the registered Azure Function to verify request parsing, response bodies,
-and errors through the hosting boundary. The development dependency group supplies
-pytest, the TestClient dependency `httpx2`, and Polars' compatibility runtime for
-machines without AVX support. These dependencies are installed by `uv sync`; they
-are not added to the production requirements. The tests block unexpected Azure
-storage access and do not require credentials or live datasets.
+and errors through the hosting boundary. Install the development dependencies,
+including pytest and TestClient's `httpx2`, with `uv sync --locked`. Tests block
+unexpected Azure storage access and do not require credentials or live datasets.
 
 ## Security
 
@@ -173,8 +171,7 @@ Easy Auth before reaching FastAPI.
 OpenAPI declares an `EntraBearer` JWT bearer scheme for the deployed API. In
 Swagger UI, use **Authorize** to supply an Entra access token for the API's
 configured audience. The deployed authentication settings currently redirect
-unauthenticated requests to Entra sign-in (302); rejected credentials can return
-401. Those platform responses have no application JSON error-body guarantee.
+unauthenticated requests to Entra sign-in (302); rejected credentials can return 401. Those platform responses have no application JSON error-body guarantee.
 Local Functions hosting does not reproduce Easy Auth.
 
 ## Response and error contracts
@@ -190,13 +187,16 @@ confirmed; the API preserves that payload.
 Application-handled errors share these JSON shapes:
 
 ```json
-{"error": "Dataset not found"}
+{ "error": "Dataset not found" }
 ```
 
 Parameter validation errors additionally identify affected fields:
 
 ```json
-{"error": "Invalid request parameters", "details": [{"field": "version", "message": "Invalid value"}]}
+{
+  "error": "Invalid request parameters",
+  "details": [{ "field": "version", "message": "Invalid value" }]
+}
 ```
 
 The documented application statuses are 400 for request validation, 404 for
