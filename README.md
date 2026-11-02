@@ -30,6 +30,8 @@ Health and documentation work without dataset storage configuration.
 
 Swagger UI is at `/docs`; the generated schema is at `/openapi.json`.
 Deployed requests use Entra Easy Auth; local hosting does not enforce it.
+Data endpoints also require the `OpenPlan.Data.Read` app role; see
+[authentication and roles](docs/authentication.md).
 
 ## API
 

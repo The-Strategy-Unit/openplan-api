@@ -46,9 +46,16 @@ identify affected fields:
 {"error":"Invalid request parameters","details":[{"field":"version","message":"Invalid value"}]}
 ```
 
-Status codes are 400 for invalid requests or inactive codes, 404 for missing
-resources, 500 for processing or server failures, and 503 for storage connection
-failures. Server exception details are logged and excluded from error responses.
+Application status codes are 400 for invalid requests or inactive codes, 401 for
+missing or malformed authenticated principals, 403 for principals without the
+required role, 404 for missing resources, 500 for processing or server failures,
+and 503 for storage connection failures. Server exception details are logged and
+excluded from error responses.
+
+Every `/v1/` endpoint requires the `OpenPlan.Data.Read` app role. Health and
+documentation have no application role requirement. See
+[authentication and roles](authentication.md) for the policy, access setup and
+deployment checks.
 
 Azure Easy Auth protects deployed endpoints, including health and documentation.
 Functions-key authentication is anonymous. Swagger's **Authorize** accepts an Entra

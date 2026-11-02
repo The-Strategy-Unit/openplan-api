@@ -35,12 +35,29 @@ class ContractTests(HTTPTestCase):
         scheme = self.document["components"]["securitySchemes"]["EntraBearer"]
         self.assertEqual(scheme["type"], "http")
         self.assertEqual(scheme["scheme"], "bearer")
-        for path_item in self.document["paths"].values():
+        for path, path_item in self.document["paths"].items():
             responses = path_item["get"]["responses"]
             self.assertIn("302", responses)
             self.assertIn("401", responses)
             self.assertNotIn("content", responses["302"])
-            self.assertNotIn("content", responses["401"])
+            if path == "/health":
+                self.assertNotIn("content", responses["401"])
+
+    def test_data_operations_document_role_errors_and_keep_principal_headers_internal(self):
+        for path, path_item in self.document["paths"].items():
+            if not path.startswith("/v1/"):
+                continue
+            operation = path_item["get"]
+            for status in ("401", "403"):
+                with self.subTest(path=path, status=status):
+                    response = operation["responses"][status]
+                    schema = self.resolve(response["content"]["application/json"]["schema"])
+                    self.assertIn("error", schema["required"])
+            self.assertIn("OpenPlan.Data.Read", operation["responses"]["403"]["description"])
+            self.assertFalse(any(
+                parameter["in"] == "header" and parameter["name"].lower() == "x-ms-client-principal"
+                for parameter in operation.get("parameters", [])
+            ))
 
     def test_data_operations_document_their_error_envelopes(self):
         for path, path_item in self.document["paths"].items():

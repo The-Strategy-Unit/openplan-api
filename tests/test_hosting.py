@@ -8,9 +8,11 @@ import azure.functions as func
 
 from function_app import app as hosted_app
 from openplan.api.app import create_app
+from openplan.api.auth import DATA_READ_ROLE
 from openplan.api.v1 import tpmas
 from openplan.api.v1.reference import providers
 from openplan.api.v1.tpmas import rates
+from tests.support import principal_headers
 
 
 class AzureHostingTests(unittest.IsolatedAsyncioTestCase):
@@ -26,10 +28,11 @@ class AzureHostingTests(unittest.IsolatedAsyncioTestCase):
             # Shutdown already ran on this loop; prevent SDK destructor repetition.
             self.host.startup_task_done = False
 
-    async def request(self, path, params=None):
+    async def request(self, path, params=None, headers=None):
         query_string = f"?{urlencode(params)}" if params else ""
         request = func.HttpRequest(
             method="GET", url=f"http://localhost{path}{query_string}", body=b"", params=params,
+            headers=principal_headers(DATA_READ_ROLE) if headers is None else headers,
         )
         return await asyncio.wait_for(self.handler(request, None), timeout=10)
 
@@ -43,16 +46,37 @@ class AzureHostingTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(func.HttpMethod.GET, trigger["methods"])
 
     async def test_health_and_documentation_work_through_the_functions_adapter(self):
-        response = await self.request("/health")
+        response = await self.request("/health", headers={})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(json.loads(response.get_body()), {"status": "ok"})
         self.assertEqual(response.headers["cache-control"], "no-store")
-        response = await self.request("/openapi.json")
+        response = await self.request("/openapi.json", headers={})
         self.assertEqual(response.status_code, 200)
         self.assertIn("/v1/tpmas/{tpma}/rates", json.loads(response.get_body())["paths"])
-        response = await self.request("/docs")
+        response = await self.request("/docs", headers={})
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"/openapi.json", response.get_body())
+
+    async def test_principal_and_role_checks_survive_the_functions_adapter(self):
+        with patch.object(providers, "get_providers", return_value={"R01": "Synthetic provider"}) as read:
+            for headers, status, message in (
+                ({}, 401, "Unauthorized"),
+                ({"X-MS-CLIENT-PRINCIPAL": "invalid-base64!"}, 401, "Unauthorized"),
+                (principal_headers(), 403, "Forbidden"),
+                (principal_headers("Unrelated.Read"), 403, "Forbidden"),
+            ):
+                with self.subTest(status=status, headers=headers):
+                    response = await self.request("/v1/reference/providers", headers=headers)
+                    self.assertEqual(response.status_code, status)
+                    self.assertEqual(json.loads(response.get_body()), {"error": message})
+                    self.assertEqual(response.headers["content-type"], "application/json")
+            read.assert_not_called()
+            response = await self.request(
+                "/v1/reference/providers", headers=principal_headers("Unrelated.Read", DATA_READ_ROLE),
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(json.loads(response.get_body()), {"R01": "Synthetic provider"})
+            read.assert_called_once_with("dev")
 
     async def test_invalid_requests_keep_the_400_json_contract_through_the_adapter(self):
         response = await self.request("/v1/reference/providers", {"version": "invalid"})
