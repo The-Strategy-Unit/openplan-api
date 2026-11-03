@@ -8,6 +8,7 @@ from azure_functions_openapi import openapi
 
 from openplan.api.v1.data import read_azure_parquet_file
 from openplan.api.v1.error_handling import handle_route_errors
+from openplan.api.v1.models import VersionQuery
 from openplan.api.v1.tpmas import TPMAPath
 from openplan.api.v1.tpmas.models import RatesQuery, RatesResponseSchema
 
@@ -59,6 +60,8 @@ def get_tpma_rates(
 )
 @handle_route_errors
 def route_tpma_rates(req: func.HttpRequest) -> func.HttpResponse:
+    # Provider validation in RatesQuery reads the selected release catalogue.
+    VersionQuery.model_validate(dict(req.params))
     query_params = RatesQuery.model_validate(dict(req.params))
     tpma = TPMAPath.model_validate(
         {"tpma": req.route_params.get("tpma")},
