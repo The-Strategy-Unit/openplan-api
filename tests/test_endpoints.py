@@ -2,6 +2,7 @@ import json
 import unittest
 from unittest.mock import patch
 
+from azure.core.exceptions import ServiceRequestError
 import polars as pl
 
 from openplan.api.v1 import data, demographics, tpmas
@@ -117,6 +118,27 @@ class EndpointContractTests(HTTPTestCase):
             with self.subTest(params=params):
                 response = self.request_rates(params)
                 self.assertEqual(response.status_code, 400)
+        self.read_rates.assert_not_called()
+
+    def test_invalid_rate_versions_do_not_access_catalogues_or_datasets(self):
+        with patch.object(
+            providers, "_get_providers", side_effect=ServiceRequestError("Synthetic storage failure"),
+        ) as provider_catalogue, patch.object(
+            tpmas, "_get_TPMAs", side_effect=ServiceRequestError("Synthetic storage failure"),
+        ) as tpma_catalogue:
+            for filters in (
+                {"provider": "R01"},
+                {"provider": "R01", "fyear": "202425"},
+                {"fyear": "202425"},
+            ):
+                with self.subTest(filters=filters):
+                    response = self.request_rates({**filters, "version": "invalid"})
+                    self.assertEqual(response.status_code, 400)
+                    payload = response.json()
+                    self.assertEqual(payload["error"], "Invalid request parameters")
+                    self.assertEqual([detail["field"] for detail in payload["details"]], ["version"])
+            provider_catalogue.assert_not_called()
+            tpma_catalogue.assert_not_called()
         self.read_rates.assert_not_called()
 
     def test_rates_reject_invalid_tpmas_before_reading_rate_data(self):
