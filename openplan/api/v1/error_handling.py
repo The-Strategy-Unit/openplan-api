@@ -6,6 +6,7 @@ from azure.core.exceptions import AzureError, ResourceNotFoundError, ServiceRequ
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from packaging.version import Version
 from pydantic import BaseModel
 from starlette.exceptions import HTTPException
 
@@ -48,7 +49,16 @@ def is_valid_fyear(fyear: str) -> bool:
 
 
 def is_valid_version(version: str) -> bool:
-    return bool(re.match(r"^(dev|v\d+\.\d+(\.\d+)?)$", version))
+    if version == "dev":
+        return True
+    if re.fullmatch(r"v[0-9]+\.[0-9]+(?:\.[0-9]+)?", version) is None:
+        return False
+    try:
+        # Catalogue comparisons use this parser, including its integer limits.
+        Version(version)
+    except ValueError:
+        return False
+    return True
 
 
 def error_response(message: str, status_code: int, headers: dict[str, str] | None = None) -> JSONResponse:

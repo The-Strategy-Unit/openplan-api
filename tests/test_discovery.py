@@ -132,6 +132,15 @@ class DiscoveryTests(HTTPTestCase):
         self.assertEqual(response.status_code, 500)
         self.assertEqual(json.loads(response.content), {"error": "Internal server error"})
 
+    def test_malformed_published_versions_remain_server_errors(self):
+        for version in ("dev\n", "v1.0\n", "v１.０", "v١.٠"):
+            with self.subTest(version=version):
+                self.index["versions"][0]["version"] = version
+                with self.assertLogs("openplan.api.v1.discovery", level="ERROR"):
+                    response = self.request("/v1/reference/versions")
+                self.assertEqual(response.status_code, 500)
+                self.assertEqual(response.json(), {"error": "Internal server error"})
+
     def test_manifest_version_must_match_its_requested_path(self):
         self.read_metadata.side_effect = None
         self.read_metadata.return_value = self.manifest | {"version": "v2.0"}

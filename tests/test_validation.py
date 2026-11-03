@@ -1,4 +1,5 @@
 import json
+import sys
 import unittest
 from unittest.mock import patch
 
@@ -28,8 +29,12 @@ class ValidationTests(HTTPTestCase):
             "OLD": {"v1.0": ["CUR"]},
             "CUR": {"v1.0": ["OLD"], "v2.0": ["NEW"]},
         }
-        self.patch_attribute(providers, "_get_providers", return_value=self.providers)
-        self.patch_attribute(tpmas, "_get_TPMAs", return_value=self.tpmas)
+        self.read_provider_catalogue = self.patch_attribute(
+            providers, "_get_providers", return_value=self.providers,
+        )
+        self.read_tpma_catalogue = self.patch_attribute(
+            tpmas, "_get_TPMAs", return_value=self.tpmas,
+        )
         self.read_peers = self.patch_attribute(peers, "read_azure_json_file", return_value=self.peers)
         rate_frame = pl.DataFrame({
             "provider": ["OLD", "CUR", "NEW"],
@@ -41,7 +46,7 @@ class ValidationTests(HTTPTestCase):
         self.demographic_factors = self.patch_attribute(
             demographics, "get_demographic_factors", return_value={"baseline": {}, "horizon": {}}
         )
-        self.patch_attribute(
+        self.read_blob = self.patch_attribute(
             data, "_read_azure_file",
             side_effect=AssertionError("Tests must not access Azure Storage"),
         )
@@ -57,6 +62,58 @@ class ValidationTests(HTTPTestCase):
         if provider is not None:
             params["provider"] = provider
         return self.request("/v1/tpmas/{tpma}/rates", params, {"tpma": tpma})
+
+    def test_malformed_versions_return_400_before_catalogue_or_dataset_access(self):
+        requests = (
+            ("/v1/reference/providers", {}),
+            ("/v1/tpmas", {}),
+            ("/v1/reference/peers/CUR", {}),
+            ("/v1/tpmas/IP-AA-002/rates", {"provider": "CUR", "fyear": "202425"}),
+            ("/v1/providers/CUR/demographic-factors", {
+                "start_year": "2024", "end_year": "2030", "variant": "principal",
+            }),
+            ("/v1/tpmas/IP-AA-002/rates/availability", {}),
+            ("/v1/providers/CUR/demographic-factors/availability", {}),
+        )
+        for version in (
+            "", "invalid", "DEV", "V1.0", "v1", "v1.0.0.0", "v1.0a1",
+            "v1.0+local", " dev", "v1.0 ", "dev\n", "v1.0\n", "v1.0\r\n",
+            "v1.0\t", "v１.０", "v١.٠", "v1.0/extra",
+        ):
+            for path, params in requests:
+                with self.subTest(version=version, path=path):
+                    response = self.request(path, {**params, "version": version})
+                    self.assertEqual(response.status_code, 400)
+                    self.assertEqual(response.headers["content-type"], "application/json")
+                    payload = response.json()
+                    self.assertEqual(payload["error"], "Invalid request parameters")
+                    self.assertEqual([detail["field"] for detail in payload["details"]], ["version"])
+        self.read_provider_catalogue.assert_not_called()
+        self.read_tpma_catalogue.assert_not_called()
+        self.read_rates.assert_not_called()
+        self.read_peers.assert_not_called()
+        self.demographic_factors.assert_not_called()
+        self.read_blob.assert_not_called()
+
+    def test_versions_beyond_the_integer_parser_limit_return_400(self):
+        limit = sys.get_int_max_str_digits()
+        if limit == 0:
+            self.skipTest("The interpreter's integer parsing limit is disabled")
+        version = "v" + "9" * (limit + 1) + ".0"
+        response = self.request_rates(provider="CUR", version=version)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual([detail["field"] for detail in response.json()["details"]], ["version"])
+        self.read_provider_catalogue.assert_not_called()
+        self.read_tpma_catalogue.assert_not_called()
+        self.read_rates.assert_not_called()
+        self.read_blob.assert_not_called()
+
+    def test_valid_versions_keep_the_requested_dataset_path(self):
+        for version in ("dev", "v1.0", "v1.0.0", "v01.00", "v10.20.30"):
+            with self.subTest(version=version):
+                response = self.request_rates(provider="CUR", version=version)
+                self.assertEqual(response.status_code, 200)
+                self.read_rates.assert_called_with(f"api/{version}/provider/rates/IP-AA-002.parquet")
 
     def test_every_listed_provider_can_be_used_for_that_dataset_version(self):
         for version in ("v1.0", "v1.9", "v2.0", "dev"):

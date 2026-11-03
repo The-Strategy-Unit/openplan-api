@@ -10,6 +10,10 @@ dataset release such as `v1.0`, defaulting to `dev`. Provider and TPMA codes mus
 exist in that release; use the catalogues with the same version. Validity includes
 the introduction release and excludes the retirement release.
 
+Release identifiers must be exactly `dev` or `v<major>.<minor>[.<patch>]`, with
+ASCII digits. Whitespace, trailing characters and unsupported version formats
+return 400 before catalogue or dataset access.
+
 The TPMA catalogue maps codes to metadata objects containing `active_from`,
 optional `active_to`, and publisher-supplied fields.
 

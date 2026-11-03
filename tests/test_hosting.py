@@ -55,9 +55,23 @@ class AzureHostingTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(b"/openapi.json", response.get_body())
 
     async def test_invalid_requests_keep_the_400_json_contract_through_the_adapter(self):
-        response = await self.request("/v1/reference/providers", {"version": "invalid"})
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(json.loads(response.get_body())["details"][0]["field"], "version")
+        with patch.object(providers, "_get_providers") as provider_catalogue, patch.object(
+            tpmas, "_get_TPMAs",
+        ) as tpma_catalogue:
+            for version in ("invalid", "dev\n", "v1.0\n", "v１.０", "v١.٠"):
+                for path, params in (
+                    ("/v1/reference/providers", {}),
+                    ("/v1/tpmas/IP-AA-001/rates", {"fyear": "202425"}),
+                ):
+                    with self.subTest(version=version, path=path):
+                        response = await self.request(path, {**params, "version": version})
+                        self.assertEqual(response.status_code, 400)
+                        self.assertEqual(response.headers["content-type"], "application/json")
+                        payload = json.loads(response.get_body())
+                        self.assertEqual(payload["error"], "Invalid request parameters")
+                        self.assertEqual([detail["field"] for detail in payload["details"]], ["version"])
+            provider_catalogue.assert_not_called()
+            tpma_catalogue.assert_not_called()
 
     async def test_dataset_selection_and_json_survive_the_adapter(self):
         rows = [{"provider": "R01", "fyear": 202425, "denominator": 100.0, "std_rate": 1.2}]

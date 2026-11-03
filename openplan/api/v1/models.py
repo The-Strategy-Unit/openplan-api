@@ -11,7 +11,7 @@ from openplan.api.v1.settings import CURRENT_APP_VERSION
 class VersionQuery(BaseModel):
     version: str = Field(
         default=CURRENT_APP_VERSION,
-        description="Dataset version, for example dev or v1.0.",
+        description="Dataset version: dev or v<major>.<minor>[.<patch>], using ASCII digits.",
     )
 
     @field_validator("version")
