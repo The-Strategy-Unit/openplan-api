@@ -63,6 +63,16 @@ uv run pytest -vv
 Tests use synthetic data and block live storage access. [CI](.github/workflows/tests.yml)
 runs tests and Python/shell syntax checks with Python 3.14 and locked dependencies.
 
+Azure deployment uses `requirements.txt`, generated from `uv.lock` without
+development dependencies. After changing dependencies, regenerate and commit it:
+
+```bash
+uv export --locked --no-dev --no-emit-project --no-header \
+  --output-file requirements.txt
+```
+
+CI checks that the generated file matches the committed requirements.
+
 ## Deployment
 
 [Infrastructure](infrastructure/) defines hosting, managed identity, and Entra

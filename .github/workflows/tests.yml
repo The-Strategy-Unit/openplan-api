@@ -32,6 +32,11 @@ jobs:
       - name: Install locked dependencies
         run: uv sync --locked
 
+      - name: Check deployment requirements match the lock
+        run: |
+          uv export --locked --no-dev --no-emit-project --no-header --output-file "$RUNNER_TEMP/requirements.txt"
+          diff -u requirements.txt "$RUNNER_TEMP/requirements.txt"
+
       - name: Check Python syntax
         run: uv run --locked python -m compileall -q function_app.py openplan tests
 
