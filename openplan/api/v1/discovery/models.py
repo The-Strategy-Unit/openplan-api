@@ -22,6 +22,11 @@ class DatasetRelease(VersionQuery):
 
 
 class VersionsResponse(PublishedModel):
+    versions: list[str]
+
+
+class DatasetIndex(PublishedModel):
+    schema_version: Literal[1]
     versions: list[DatasetRelease]
 
     @field_validator("versions")
@@ -30,10 +35,6 @@ class VersionsResponse(PublishedModel):
         if len({release.version for release in value}) != len(value):
             raise ValueError("Dataset versions must be unique")
         return value
-
-
-class DatasetIndex(VersionsResponse):
-    schema_version: Literal[1]
 
 
 class RateSelection(PublishedModel):

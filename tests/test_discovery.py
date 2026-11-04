@@ -5,7 +5,7 @@ from pathlib import Path
 import unittest
 from unittest.mock import patch
 
-from azure.core.exceptions import ResourceNotFoundError, ServiceRequestError
+from azure.core.exceptions import AzureError, ResourceNotFoundError, ServiceRequestError
 from pydantic import ValidationError
 
 from openplan.api.v1 import data, discovery, tpmas
@@ -21,6 +21,10 @@ class DiscoveryTests(HTTPTestCase):
         super().setUp()
         self.index = json.loads((EXAMPLES / "dataset-index.json").read_text())
         self.manifest = json.loads((EXAMPLES / "dataset-manifest.json").read_text())
+        self.directories = ["dev", "v5.1", "v4.0"]
+        self.list_directories = self.patch_attribute(
+            discovery, "list_azure_directories", return_value=self.directories,
+        )
         self.patch_attribute(providers, "_get_providers", return_value={
             "R01": {"name": "Provider one", "valid_from": "v1.0"},
             "R02": {"name": "Provider two", "valid_from": "v1.0"},
@@ -42,8 +46,6 @@ class DiscoveryTests(HTTPTestCase):
         return mock
 
     def metadata(self, filename):
-        if filename == "api/versions.json":
-            return self.index
         if filename == f"api/{self.manifest['version']}/manifest.json":
             return self.manifest
         raise ResourceNotFoundError("Synthetic missing metadata")
@@ -54,12 +56,56 @@ class DiscoveryTests(HTTPTestCase):
     def demographic_request(self, version="v1.0", provider="R01"):
         return self.request("/v1/providers/{provider}/demographic-factors/availability", {"version": version}, {"provider": provider})
 
-    def test_versions_return_published_release_metadata(self):
+    def test_versions_return_directory_names_without_metadata_reads(self):
         response = self.request("/v1/reference/versions")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(json.loads(response.content), {"versions": self.index["versions"]})
+        self.assertEqual(response.json(), {"versions": self.directories})
         self.assertEqual(response.headers["Cache-Control"], "no-store")
-        self.read_metadata.assert_called_once_with("api/versions.json")
+        self.list_directories.assert_called_once_with()
+        self.read_metadata.assert_not_called()
+
+    def test_versions_filter_unrelated_and_malformed_directory_names(self):
+        self.list_directories.return_value = [
+            "api", "archive", "", "DEV", "v1", "v1.0.0.0", "v1.0a1",
+            "dev\n", "v1.0\n", "v１.０", "v١.٠", "v1.0/other",
+            "dev", "v5.1", "v4.0", "v1.0.0",
+        ]
+        response = self.request("/v1/reference/versions")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"versions": ["dev", "v5.1", "v4.0", "v1.0.0"]})
+
+    def test_versions_return_an_empty_list_when_no_version_directories_exist(self):
+        for directories in ([], ["api", "archive"]):
+            with self.subTest(directories=directories):
+                self.list_directories.return_value = directories
+                response = self.request("/v1/reference/versions")
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json(), {"versions": []})
+
+    def test_versions_openapi_describes_an_array_of_strings(self):
+        document = self.request("/openapi.json").json()
+        schema = document["components"]["schemas"]["VersionsResponse"]
+        self.assertEqual(schema["required"], ["versions"])
+        self.assertEqual(schema["properties"]["versions"]["items"], {"type": "string"})
+
+    def test_directory_listing_failures_keep_the_http_error_contract(self):
+        for error, status in (
+            (ResourceNotFoundError("Synthetic missing container"), 404),
+            (ServiceRequestError("Synthetic storage failure"), 503),
+            (AzureError("Synthetic storage failure"), 500),
+        ):
+            with self.subTest(error=type(error).__name__):
+                self.list_directories.side_effect = error
+                if status == 404:
+                    response = self.request("/v1/reference/versions")
+                else:
+                    with self.assertLogs("openplan.api.v1.discovery", level="ERROR"):
+                        response = self.request("/v1/reference/versions")
+                self.assertEqual(response.status_code, status)
+                self.assertEqual(response.headers["content-type"], "application/json")
+                self.assertEqual(set(response.json()), {"error"})
+                self.assertNotIn("Synthetic", response.text)
+        self.read_metadata.assert_not_called()
 
     def test_rate_availability_preserves_valid_combinations(self):
         response = self.rate_request()
@@ -116,7 +162,6 @@ class DiscoveryTests(HTTPTestCase):
 
     def test_missing_metadata_blobs_return_not_found(self):
         self.read_metadata.side_effect = ResourceNotFoundError("Synthetic missing blob")
-        self.assertEqual(self.request("/v1/reference/versions").status_code, 404)
         self.assertEqual(self.rate_request().status_code, 404)
         self.assertEqual(self.demographic_request().status_code, 404)
 
@@ -133,11 +178,12 @@ class DiscoveryTests(HTTPTestCase):
         self.assertEqual(json.loads(response.content), {"error": "Internal server error"})
 
     def test_malformed_published_versions_remain_server_errors(self):
+        self.read_metadata.side_effect = None
         for version in ("dev\n", "v1.0\n", "v１.０", "v١.٠"):
             with self.subTest(version=version):
-                self.index["versions"][0]["version"] = version
+                self.read_metadata.return_value = self.manifest | {"version": version}
                 with self.assertLogs("openplan.api.v1.discovery", level="ERROR"):
-                    response = self.request("/v1/reference/versions")
+                    response = self.rate_request()
                 self.assertEqual(response.status_code, 500)
                 self.assertEqual(response.json(), {"error": "Internal server error"})
 
@@ -148,11 +194,11 @@ class DiscoveryTests(HTTPTestCase):
             self.assertEqual(self.rate_request().status_code, 500)
 
     def test_new_releases_are_visible_without_worker_restart(self):
-        updated = deepcopy(self.index)
-        updated["versions"].append(updated["versions"][0] | {"version": "v2.0"})
-        self.read_metadata.side_effect = [self.index, updated]
-        self.assertEqual(len(json.loads(self.request("/v1/reference/versions").content)["versions"]), 1)
-        self.assertEqual(len(json.loads(self.request("/v1/reference/versions").content)["versions"]), 2)
+        updated = [*self.directories, "v6.0"]
+        self.list_directories.side_effect = [self.directories, updated]
+        self.assertEqual(self.request("/v1/reference/versions").json(), {"versions": self.directories})
+        self.assertEqual(self.request("/v1/reference/versions").json(), {"versions": updated})
+        self.assertEqual(self.list_directories.call_count, 2)
 
     def test_example_metadata_validates_without_catalogue_access(self):
         with patch.object(providers, "_get_providers", side_effect=AssertionError("No catalogue reads")), \
@@ -191,8 +237,8 @@ class DiscoveryTests(HTTPTestCase):
 
     def test_uncached_json_reader_observes_replaced_metadata(self):
         with patch.object(data, "_read_azure_file", side_effect=[BytesIO(b'{"revision": 1}'), BytesIO(b'{"revision": 2}')]):
-            self.assertEqual(data.read_azure_json_file_uncached("api/versions.json"), {"revision": 1})
-            self.assertEqual(data.read_azure_json_file_uncached("api/versions.json"), {"revision": 2})
+            self.assertEqual(data.read_azure_json_file_uncached("api/dev/manifest.json"), {"revision": 1})
+            self.assertEqual(data.read_azure_json_file_uncached("api/dev/manifest.json"), {"revision": 2})
 
 
 if __name__ == "__main__":

@@ -18,8 +18,8 @@ The TPMA catalogue maps codes to metadata objects containing `active_from`,
 optional `active_to`, and publisher-supplied fields.
 
 Catalogue responses and identifier validation follow the
-[dataset cache lifetime](caching.md#freshness). Release indexes and manifests
-are read without caching.
+[dataset cache lifetime](caching.md#freshness). Version directory listings and
+manifests are read without caching.
 
 ## Responses
 
@@ -36,8 +36,12 @@ are read without caching.
   peer sets return 404; an explicitly empty set returns 200.
 - **Health:** returns `{"status":"ok"}` without contacting storage. This checks
   application liveness, not dataset availability, and uses `Cache-Control: no-store`.
-- **Discovery:** returns published releases and valid query combinations, with
-  provenance, publication time, and supplied units. See [dataset manifests](dataset-manifests.md).
+- **Versions:** returns `{"versions":["dev","v5.1","v4.0"]}` from valid top-level
+  directory names in the configured storage container. Directory presence does
+  not guarantee a complete release. Ordering follows the storage listing and
+  does not indicate which version is newest.
+- **Availability:** returns valid query combinations, with provenance,
+  publication time, and supplied units. See [dataset manifests](dataset-manifests.md).
 
 FastAPI validates responses against the models used to generate OpenAPI.
 
@@ -72,3 +76,6 @@ The following routes have been replaced without compatibility aliases:
 | `/v1/demographics/provider/{provider}/{start_year}/{end_year}/{variant}` | `/v1/providers/{provider}/demographic-factors?start_year={start_year}&end_year={end_year}&variant={variant}` |
 
 Rate responses now always include both provider and financial year.
+
+The draft `/v1/reference/versions` response now contains version-name strings
+instead of release metadata objects. It no longer reads `api/versions.json`.

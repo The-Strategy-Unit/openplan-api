@@ -9,21 +9,52 @@ provider and demographic datasets for OpenPlan.
 ## Local development
 
 Requires Python 3.14, uv, and Azure Functions Core Tools.
+The storage login example below also requires Azure CLI.
 
 ```bash
 uv sync --locked
 source .venv/bin/activate
 ```
 
+On older CPUs without AVX/AVX2 support, Polars can crash with exit code 132.
+Install its matching [compatibility runtime](https://docs.pola.rs/user-guide/installation/#legacy-cpu)
+locally after syncing:
+
+```bash
+polars_version=$(.venv/bin/python -c 'from importlib.metadata import version; print(version("polars"))')
+uv pip install --python .venv/bin/python "polars-runtime-compat==$polars_version"
+export POLARS_FORCE_PKG=compat
+```
+
+This leaves production dependencies unchanged. Repeat the compatibility steps
+after `uv sync --locked`, which removes packages not declared in the project.
+
 Configure `local.settings.json` using [the example](local.settings.example.json),
-then run `func start`. Set these values in its `Values` section:
+setting these values in its `Values` section:
 
 | Setting                           | Value                        |
 | --------------------------------- | ---------------------------- |
 | `OPENPLAN_STORAGE_ACCOUNT_NAME`   | Dataset storage account name |
 | `OPENPLAN_STORAGE_CONTAINER_NAME` | Dataset blob container name  |
 
-Data reads use `DefaultAzureCredential` and require container read access.
+Data access uses `DefaultAzureCredential` and requires container read/list permissions.
+Sign in with an identity that has those permissions, then start the local host:
+
+```bash
+az login
+func start
+```
+
+In another terminal, check application liveness and version-directory discovery:
+
+```bash
+curl -i --max-time 10 http://localhost:7071/health
+curl -i --max-time 10 http://localhost:7071/v1/reference/versions
+```
+
+Expect HTTP 200: `{"status":"ok"}` for health and a `versions` array of directory
+names for discovery. An empty container returns `{"versions":[]}`.
+
 Datasets cache for five minutes by default; see
 [cache settings and limits](docs/caching.md).
 Health and documentation work without dataset storage configuration.
@@ -53,12 +84,12 @@ Demographics require all three selection parameters, with `end_year >= start_yea
 Discover valid codes through the catalogues using the same dataset version.
 
 See [API contracts and route changes](docs/api.md) for response and error details.
-Discovery requires publisher-supplied [dataset manifests](docs/dataset-manifests.md).
+Availability queries require publisher-supplied [dataset manifests](docs/dataset-manifests.md).
 
 ## Tests
 
 ```bash
-uv run pytest -vv
+uv run --locked pytest -vv
 ```
 
 Tests use synthetic data and block live storage access. [CI](.github/workflows/tests.yml)

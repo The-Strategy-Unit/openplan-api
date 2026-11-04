@@ -3,7 +3,7 @@ from io import BytesIO
 
 import polars as pl
 from azure.identity import DefaultAzureCredential
-from azure.storage.blob import BlobServiceClient
+from azure.storage.blob import BlobPrefix, BlobServiceClient
 
 from openplan.api.v1.cache import BlobCache
 from openplan.api.v1.settings import StorageSettings, get_cache_settings, get_storage_settings
@@ -14,6 +14,20 @@ _blob_cache = BlobCache()
 
 def clear_dataset_cache() -> None:
     _blob_cache.clear()
+
+
+def list_azure_directories() -> list[str]:
+    settings = get_storage_settings()
+    with BlobServiceClient(
+        account_url=settings.account_url,
+        credential=credential,
+    ) as service:
+        container = service.get_container_client(settings.container_name)
+        return [
+            item.name.removesuffix("/")
+            for item in container.walk_blobs(delimiter="/")
+            if isinstance(item, BlobPrefix)
+        ]
 
 
 def _read_azure_file(file: str, *, settings: StorageSettings | None = None) -> BytesIO:

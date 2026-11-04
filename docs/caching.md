@@ -25,7 +25,7 @@ documentation do not read cache settings.
   read after expiry downloads again. Expired bytes are removed on cache access.
 - **Catalogues:** provider/TPMA responses and identifier validation follow this
   lifetime, so published changes may take that long to appear.
-- **Discovery:** release indexes and manifests bypass the cache. Successful
+- **Discovery:** version directory listings and manifests bypass the cache. Successful
   discovery responses use `Cache-Control: no-store`.
 - **Clearing:** changing either setting clears retained entries on the next
   cached read; restarting a worker also clears its cache. Downloads started

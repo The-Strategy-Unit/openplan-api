@@ -138,11 +138,11 @@ class DatasetReaderTests(unittest.TestCase):
         with patch.object(data, "_read_azure_file", side_effect=[
             BytesIO(b'{"revision": 1}'), BytesIO(b'{"revision": 2}'), BytesIO(b'{"revision": 3}'),
         ]) as read:
-            self.assertEqual(data.read_azure_json_file("api/versions.json"), {"revision": 1})
+            self.assertEqual(data.read_azure_json_file("api/dev/manifest.json"), {"revision": 1})
             with patch.dict(os.environ, {"OPENPLAN_CACHE_TTL_SECONDS": "invalid"}):
-                self.assertEqual(data.read_azure_json_file_uncached("api/versions.json"), {"revision": 2})
-            self.assertEqual(data.read_azure_json_file("api/versions.json"), {"revision": 1})
-            self.assertEqual(data.read_azure_json_file_uncached("api/versions.json"), {"revision": 3})
+                self.assertEqual(data.read_azure_json_file_uncached("api/dev/manifest.json"), {"revision": 2})
+            self.assertEqual(data.read_azure_json_file("api/dev/manifest.json"), {"revision": 1})
+            self.assertEqual(data.read_azure_json_file_uncached("api/dev/manifest.json"), {"revision": 3})
         self.assertEqual(read.call_count, 3)
 
     def test_invalid_cache_configuration_fails_before_downloading(self):

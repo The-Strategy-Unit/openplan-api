@@ -1,8 +1,11 @@
 import json
 import os
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, call, patch
 
+from azure.core.exceptions import ServiceRequestError
+from azure.core.paging import ItemPaged
+from azure.storage.blob import BlobPrefix, BlobProperties
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -71,6 +74,62 @@ class StorageConfigurationTests(unittest.TestCase):
         storage.assert_not_called()
         self.assertEqual(response.status_code, 500)
         self.assertEqual(response.json(), {"error": "Internal server error"})
+
+
+class DirectoryListingTests(unittest.TestCase):
+    def setUp(self):
+        self.enterContext(patch.dict(os.environ, {
+            "OPENPLAN_STORAGE_ACCOUNT_NAME": "syntheticstorage",
+            "OPENPLAN_STORAGE_CONTAINER_NAME": "synthetic-inputs",
+        }, clear=True))
+        self.client = self.enterContext(patch.object(data, "BlobServiceClient"))
+        self.service = self.client.return_value.__enter__.return_value
+        self.container = self.service.get_container_client.return_value
+
+    def test_lists_only_immediate_directories_across_all_pages(self):
+        next_page = Mock(side_effect=[
+            ("second-page", [BlobPrefix(prefix="dev/"), BlobProperties(name="v9.0")]),
+            (None, [BlobPrefix(prefix="v4.0/"), BlobPrefix(prefix="api/")]),
+        ])
+        self.container.walk_blobs.return_value = ItemPaged(
+            get_next=next_page, extract_data=lambda page: page,
+        )
+
+        self.assertEqual(data.list_azure_directories(), ["dev", "v4.0", "api"])
+
+        self.client.assert_called_once_with(
+            account_url="https://syntheticstorage.blob.core.windows.net", credential=data.credential,
+        )
+        self.service.get_container_client.assert_called_once_with("synthetic-inputs")
+        self.container.walk_blobs.assert_called_once_with(delimiter="/")
+        self.assertEqual(next_page.call_args_list, [call(None), call("second-page")])
+        self.client.return_value.__exit__.assert_called_once_with(None, None, None)
+
+    def test_empty_listing_and_new_directories_are_not_cached(self):
+        self.container.walk_blobs.side_effect = [iter([]), iter([BlobPrefix(prefix="dev/")])]
+        with patch.dict(os.environ, {"OPENPLAN_CACHE_TTL_SECONDS": "invalid"}):
+            self.assertEqual(data.list_azure_directories(), [])
+            self.assertEqual(data.list_azure_directories(), ["dev"])
+        self.assertEqual(self.container.walk_blobs.call_count, 2)
+        self.assertEqual(self.client.return_value.__exit__.call_count, 2)
+
+    def test_later_page_failures_propagate_and_close_the_client(self):
+        next_page = Mock(side_effect=[
+            ("second-page", [BlobPrefix(prefix="dev/")]),
+            ServiceRequestError("Synthetic listing failure"),
+        ])
+        self.container.walk_blobs.return_value = ItemPaged(
+            get_next=next_page, extract_data=lambda page: page,
+        )
+        with self.assertRaises(ServiceRequestError):
+            data.list_azure_directories()
+        self.client.return_value.__exit__.assert_called_once()
+
+    def test_missing_settings_fail_before_client_construction(self):
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaises(RuntimeError):
+                data.list_azure_directories()
+        self.client.assert_not_called()
 
 
 if __name__ == "__main__":

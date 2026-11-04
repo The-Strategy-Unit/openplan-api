@@ -3,12 +3,12 @@ from typing import Annotated, TypeVar
 from fastapi import APIRouter, HTTPException, Path, Query, Response
 from pydantic import BaseModel, ValidationError
 
-from openplan.api.v1.data import read_azure_json_file_uncached
+from openplan.api.v1.data import list_azure_directories, read_azure_json_file_uncached
 from openplan.api.v1.discovery.models import (
-    DatasetIndex, DatasetManifest, DemographicAvailabilityResponse,
+    DatasetManifest, DemographicAvailabilityResponse,
     RateAvailabilityResponse, VersionsResponse,
 )
-from openplan.api.v1.error_handling import DATA_ERROR_RESPONSES, METADATA_ERROR_RESPONSES
+from openplan.api.v1.error_handling import DATA_ERROR_RESPONSES, METADATA_ERROR_RESPONSES, is_valid_version
 from openplan.api.v1.models import VersionQuery
 from openplan.api.v1.reference.providers import ProviderIdentifier, validate_provider
 from openplan.api.v1.tpmas import TPMAIdentifier, validate_tpma
@@ -34,14 +34,21 @@ def _read_manifest(version: str) -> DatasetManifest:
 
 @router.get(
     "/v1/reference/versions", response_model=VersionsResponse,
-    summary="List published dataset releases",
-    description="Returns releases from the publisher's index, including publication time and source.",
+    summary="List dataset versions",
+    description=(
+        "Returns valid dataset version names from top-level directories in the configured container. "
+        "Directory presence does not guarantee a complete release."
+    ),
     responses=METADATA_ERROR_RESPONSES,
 )
 def route_versions(response: Response) -> VersionsResponse:
-    index = _read_metadata("api/versions.json", DatasetIndex)
+    versions = [
+        name
+        for name in list_azure_directories()
+        if is_valid_version(name)
+    ]
     response.headers["Cache-Control"] = "no-store"
-    return VersionsResponse(versions=index.versions)
+    return VersionsResponse(versions=versions)
 
 
 @router.get(
