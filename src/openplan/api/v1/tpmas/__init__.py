@@ -1,53 +1,25 @@
 import json
 import logging
-from typing import Annotated, Any
+from typing import Annotated
 
 import azure.functions as func
 from azure_functions_openapi import openapi
 from packaging.version import Version
-from pydantic import AfterValidator, BaseModel, Field, TypeAdapter
+from pydantic import AfterValidator, BaseModel, Field, TypeAdapter, ValidationInfo
 
 from openplan.api.v1.data import read_azure_json_file
-from openplan.api.v1.error_handling import handle_route_errors
-from openplan.api.v1.models import VersionQuery
-from openplan.api.v1.settings import CURRENT_APP_VERSION
+from openplan.api.v1.handle_route_errors import handle_route_errors
+from openplan.api.v1.models.version import VersionQuery, version_query_validate
 
 bp = func.Blueprint()
 logger = logging.getLogger(__name__)
 
 
-def _get_TPMAs():
+def _get_TPMAs() -> dict[str, dict[str, str]]:
     return read_azure_json_file("api/tpmas.json")
 
 
-def validate_tpma(value: str) -> str:
-    if not is_valid_tpma(value):
-        raise ValueError("Not recognised as a valid TPMA code")
-    return value
-
-
-TPMACode = Annotated[
-    str,
-    Field(
-        pattern=r"^(IP|OP|AE)-(AA|EF)-\d{3}$",
-        description="TPMA code.",
-    ),
-    AfterValidator(validate_tpma),
-]
-
-
-class TPMAPath(BaseModel):
-    tpma: TPMACode
-
-
-class TPMAResponseModel(BaseModel):
-    model_config = {"extra": "allow"}
-
-
-TPMAResponseSchema = TypeAdapter(dict[str, str]).json_schema()
-
-
-def get_tpmas(version: Version | str | None = None) -> Any:
+def get_tpmas(version: Version | str | None = None) -> dict[str, dict[str, str]]:
     if version is None or version == "dev":
 
         def compare_version(v):
@@ -69,6 +41,36 @@ def is_valid_tpma(tpma: str, version: Version | str | None = None) -> bool:
     return tpma in get_tpmas(version)
 
 
+def validate_tpma(value: str, info: ValidationInfo) -> str:
+    version = info.context
+    if not is_valid_tpma(value, version):
+        raise ValueError("Not recognised as a valid TPMA code")
+    return value
+
+
+TPMACode = Annotated[
+    str,
+    Field(
+        pattern=r"^(IP|OP|AE)-(AA|EF)-\d{3}$",
+        description="TPMA code.",
+    ),
+    AfterValidator(validate_tpma),
+]
+
+
+class TPMAPath(BaseModel):
+    tpma: TPMACode
+
+
+def tpma_path_validate(req: func.HttpRequest) -> tuple[TPMACode, str]:
+    version = version_query_validate(req)
+    tpma = TPMAPath.model_validate(
+        {"tpma": req.route_params.get("tpma")},
+        context=version,
+    ).tpma
+    return tpma, version
+
+
 @bp.route("v1/tpmas", methods=["GET"])
 @openapi(
     summary="List available TPMAs",
@@ -80,7 +82,7 @@ def is_valid_tpma(tpma: str, version: Version | str | None = None) -> bool:
             "description": "Successful response",
             "content": {
                 "application/json": {
-                    "schema": TPMAResponseSchema,
+                    "schema": TypeAdapter(dict[str, str]).json_schema(),
                 }
             },
         },
@@ -89,10 +91,7 @@ def is_valid_tpma(tpma: str, version: Version | str | None = None) -> bool:
 )
 @handle_route_errors
 def route_tpmas(req: func.HttpRequest) -> func.HttpResponse:
-    query_params = VersionQuery.model_validate(
-        {"version": req.params.get("version", CURRENT_APP_VERSION)}
-    )
-    version = query_params.version
+    version = version_query_validate(req)
 
     tpmas = get_tpmas(version)
     return func.HttpResponse(json.dumps(tpmas), mimetype="application/json")
