@@ -18,6 +18,7 @@ def mock_peers():
         ("v1.9.0", ["b", "c", "d"]),
         ("v2.0.0", ["e", "f", "g"]),
         (Version("v2.0.0"), ["e", "f", "g"]),
+        (Version("v0.0.1"), []),
     ),
 )
 def test__get_peers(mocker, version, expected, mock_peers):

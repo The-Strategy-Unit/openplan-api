@@ -24,16 +24,12 @@ def _get_peers(provider: str, version: Version | str | None = None) -> list[str]
             version = Version(version)
         compare_version = lambda v: Version(v) <= version
 
-    peers = max(
-        (
-            (Version(k2), v2)
-            for k2, v2 in peers[provider].items()
-            if compare_version(k2)
-        ),
-        default=(None, None),
-        key=lambda x: x[0],
-    )
-    return peers[1] or []
+    matching_peers = [
+        (Version(k2), v2) for k2, v2 in peers[provider].items() if compare_version(k2)
+    ]
+    if not matching_peers:
+        return []
+    return max(matching_peers, key=lambda x: x[0])[1]
 
 
 @bp.route("v1/reference/peers/{provider}", methods=["GET"])
