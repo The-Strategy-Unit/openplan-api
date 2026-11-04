@@ -30,6 +30,13 @@ jobs:
         run: uv run pytest --cov-report xml:coverage.xml
 
       - name: Upload Coverage to Codecov
+        if: ${{ !cancelled() }}
         uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
