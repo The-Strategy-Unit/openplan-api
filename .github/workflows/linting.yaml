@@ -1,0 +1,40 @@
+name: Linting and Type checking
+
+on: pull_request
+
+permissions:
+  contents: read
+
+jobs:
+  ruff-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/ruff-action@v4.1.0
+
+  ruff-format-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/ruff-action@v4.1.0
+        with:
+          args: format --check --diff
+
+  ty-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install the latest version of uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "latest"
+          activate-environment: true
+
+      - name: Install dependencies
+        run: uv sync --locked --dev
+
+      - name: Generate Report
+        run: uvx ty check .
