@@ -27,9 +27,17 @@ jobs:
         run: uv sync --dev
 
       - name: Generate Report
-        run: uv run pytest --cov-report xml:coverage.xml
+        run: uv run pytest --cov-report xml:coverage.xml --junitxml=junit.xml
 
       - name: Upload Coverage to Codecov
+        if: ${{ !cancelled() }}
         uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          report_type: test_results
